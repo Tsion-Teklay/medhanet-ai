@@ -1,32 +1,69 @@
-# React + TypeScript + Vite
+# መድሃኔት AI (MedhaNet AI)
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+AI-powered healthcare intelligence network connecting patients, pharmacies, and healthcare
+systems in Ethiopia.
 
-Currently, two official plugins are available:
+## Structure
+- `backend/` — Node.js + Express + Prisma API (port 5000)
+- `ai/` — Python FastAPI AI services (port 8000)
+- `web/` — React dashboard for pharmacies and admins (port 5173)
+- `mobile/` — React Native (Expo) patient app
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Stack
+Node.js/Express · MySQL 8 · Prisma · Python FastAPI · React · React Native (Expo)
 
-## React Compiler
+## Running locally
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+One-time, per app: copy each `.env.example` to `.env` and fill it in
+(`backend/`, `ai/`, `web/`).
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```powershell
+cd backend
+npm install
+npx prisma migrate deploy
+npm run seed
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Then run `.\dev.ps1` from the root to start backend, ai, and web together.
+
+## Demo accounts
+
+Seeded by `npm run seed`, all with password `password123`:
+
+| Role | Phone |
+|---|---|
+| Admin | `0911000000` |
+| Patient | `0922000000` |
+| Pharmacy | `0933000010` … `0933000021` |
+
+## API
+
+| Method | Route | Notes |
+|---|---|---|
+| `GET` | `/api/health` | |
+| `POST` | `/api/auth/register` | `{ phone, password, name, role? }` |
+| `POST` | `/api/auth/login` | `{ phone, password }` |
+| `GET` | `/api/auth/me` | requires `Authorization: Bearer <token>` |
+| `GET` | `/api/medicines?q=` | catalogue browse |
+| `GET` | `/api/medicines/:id` | |
+| `GET` | `/api/search?q=&lat=&lng=&radiusKm=` | nearby verified pharmacies with stock |
+
+Pharmacy portal (role `PHARMACY`, own pharmacy only):
+
+| Method | Path | Notes |
+|---|---|---|
+| `POST` | `/api/pharmacy` | onboarding: create the (PENDING) pharmacy |
+| `GET` `PATCH` | `/api/pharmacy/me` | profile, opening hours, open/closed |
+| `GET` `POST` | `/api/pharmacy/inventory` | list / add stock |
+| `PATCH` `DELETE` | `/api/pharmacy/inventory/:id` | update quantity, price, expiry / remove |
+| `POST` | `/api/pharmacy/inventory/bulk` | `{ items: [...] }` from a parsed CSV |
+| `GET` | `/api/pharmacy/stats` | inventory value, low stock, expiring soon |
+
+Admin (role `ADMIN`):
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/admin/pharmacies?status=&q=` | verification queue |
+| `GET` | `/api/admin/pharmacies/:id` | licence details for review |
+| `PATCH` | `/api/admin/pharmacies/:id/status` | `{ status, rejectionReason? }` |
+| `GET` | `/api/admin/stats` | platform totals |

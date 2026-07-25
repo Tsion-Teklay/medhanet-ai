@@ -1,0 +1,114 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(uuid())
+  phone        String        @unique
+  password     String
+  name         String
+  role         String        @default("PATIENT")
+  createdAt    DateTime      @default(now())
+  pharmacy     Pharmacy?
+  reservations Reservation[]
+}
+
+model Pharmacy {
+  id         String      @id @default(uuid())
+  ownerId    String      @unique
+  owner      User        @relation(fields: [ownerId], references: [id])
+  name       String
+  address    String      @db.Text
+  phone      String
+  lat        Float
+  lng        Float
+  licenseUrl String?     @db.Text
+  licenseNo  String?
+  tinNumber  String?
+  status     String      @default("PENDING")
+  rejectionReason String? @db.Text
+  reviewedAt DateTime?
+  isOpen     Boolean     @default(true)
+  openTime   String      @default("08:00")
+  closeTime  String      @default("20:00")
+  createdAt  DateTime    @default(now())
+  inventory  Inventory[]
+
+  @@index([status])
+}
+
+model Medicine {
+  id          String      @id @default(uuid())
+  name        String
+  genericName String
+  category    String
+  strength    String
+  dosageForm  String?
+  manufacturer String?
+  prescriptionRequired Boolean @default(false)
+  description String?     @db.Text
+  inventory   Inventory[]
+
+  @@index([name])
+  @@index([genericName])
+}
+
+model Inventory {
+  id           String        @id @default(uuid())
+  pharmacyId   String
+  medicineId   String
+  pharmacy     Pharmacy      @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
+  medicine     Medicine      @relation(fields: [medicineId], references: [id])
+  quantity     Int
+  minStock     Int           @default(10)
+  price        Float
+  batchNo      String?
+  expiryDate   DateTime
+  updatedAt    DateTime      @default(now()) @updatedAt
+  reservations Reservation[]
+
+  @@unique([pharmacyId, medicineId])
+  @@index([medicineId])
+}
+
+model Reservation {
+  id          String    @id @default(uuid())
+  userId      String
+  inventoryId String
+  user        User      @relation(fields: [userId], references: [id])
+  inventory   Inventory @relation(fields: [inventoryId], references: [id])
+  quantity    Int
+  pickupCode  String
+  status      String    @default("PENDING")
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@index([inventoryId])
+}
+
+model Prescription {
+  id        String   @id @default(uuid())
+  userId    String
+  imageUrl  String   @db.Text
+  extracted Json?
+  status    String   @default("PROCESSING")
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid())
+  userId    String
+  role      String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
