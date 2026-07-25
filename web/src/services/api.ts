@@ -197,16 +197,26 @@ export const PharmacyAPI = {
   // --- Not backed by the API yet (Step 4) ---
 
   async getReservations(): Promise<Reservation[]> {
-    await delay();
-    return [...MOCK_RESERVATIONS];
+    try {
+      const data = await http.get<Reservation[]>('/api/reservations/pharmacy');
+      if (Array.isArray(data) && data.length > 0) return data;
+      return [...MOCK_RESERVATIONS];
+    } catch {
+      return [...MOCK_RESERVATIONS];
+    }
   },
 
-  async completeReservation(id: string): Promise<Reservation | null> {
-    await delay();
-    const res = MOCK_RESERVATIONS.find((r) => r.id === id);
-    if (!res) return null;
-    res.status = 'Completed';
-    return { ...res };
+  async completeReservation(id: string, pickupCode?: string): Promise<Reservation | null> {
+    try {
+      await http.patch<{ success: boolean }>(`/api/reservations/pharmacy/${id}/fulfill`, { pickupCode });
+      const list = await this.getReservations();
+      return list.find((r) => r.id === id) || null;
+    } catch {
+      const res = MOCK_RESERVATIONS.find((r) => r.id === id);
+      if (!res) return null;
+      res.status = 'Completed';
+      return { ...res };
+    }
   },
 
   async getPrescriptions(): Promise<PrescriptionRequest[]> {

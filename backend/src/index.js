@@ -9,6 +9,9 @@ import medicineRoutes from "./routes/medicines.js";
 import searchRoutes from "./routes/search.js";
 import pharmacyRoutes from "./routes/pharmacy.js";
 import adminRoutes from "./routes/admin.js";
+import reservationRoutes from "./routes/reservations.js";
+import prescriptionRoutes from "./routes/prescriptions.js";
+import chatRoutes from "./routes/chat.js";
 
 dotenv.config();
 
@@ -28,6 +31,9 @@ app.use("/api/medicines", medicineRoutes);
 app.use("/api/search", searchRoutes);
 app.use("/api/pharmacy", pharmacyRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/reservations", reservationRoutes);
+app.use("/api/prescriptions", prescriptionRoutes);
+app.use("/api/chat", chatRoutes);
 
 app.use((req, res) => res.status(404).json({ error: "Not found" }));
 
@@ -37,5 +43,5 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Something went wrong" });
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Backend running on http://localhost:${PORT}`));
+const PORT = Number(process.env.PORT || 3000);
+app.listen(PORT, "0.0.0.0", () => console.log(`Backend running on http://localhost:${PORT} (bound to 0.0.0.0)`));
