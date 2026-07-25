@@ -44,7 +44,13 @@ function PharmacyAppContent() {
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname.toLowerCase();
+      return path.includes('onboarding') || path.includes('register');
+    }
+    return false;
+  });
 
   // Show Onboarding flow (separate full-screen flow, not authenticated)
   if (showOnboarding) {
@@ -52,6 +58,9 @@ function PharmacyAppContent() {
       <OnboardingPage
         onOnboardingComplete={() => {
           setShowOnboarding(false);
+          if (typeof window !== 'undefined' && window.history.pushState) {
+            window.history.pushState({}, '', '/');
+          }
         }}
       />
     );

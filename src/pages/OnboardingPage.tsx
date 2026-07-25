@@ -120,7 +120,60 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onOnboardingComp
     setDocs((prev) => prev.map((d) => (d.key === key ? { ...d, [field]: val } : d)));
   };
 
-  const handleSubmit = () => setSubmitted(true);
+  const [validationError, setValidationError] = useState('');
+
+  const isStepValid = (currentStep: OnboardingStep): boolean => {
+    setValidationError('');
+    if (currentStep === 1) {
+      if (!email.trim() || !phone.trim() || !password || !confirmPassword) {
+        setValidationError('Please fill in all required fields (*)');
+        return false;
+      }
+      if (password !== confirmPassword) {
+        setValidationError('Passwords do not match');
+        return false;
+      }
+      if (!agreed) {
+        setValidationError('You must agree to the Terms of Service');
+        return false;
+      }
+    } else if (currentStep === 2) {
+      if (!pharmacyName.trim() || !ownerName.trim() || !tin.trim() || !regNumber.trim()) {
+        setValidationError('Please fill in all required fields (*)');
+        return false;
+      }
+      if (tin.length < 9) {
+        setValidationError('TIN number must be at least 9–10 digits');
+        return false;
+      }
+    } else if (currentStep === 3) {
+      if (!region.trim() || !city.trim() || !subCity.trim() || !woreda.trim() || !street.trim()) {
+        setValidationError('Please fill in all required location fields (*)');
+        return false;
+      }
+    } else if (currentStep === 5) {
+      const uploadedCount = docs.filter((d) => d.uploaded).length;
+      if (uploadedCount < docs.length) {
+        setValidationError('Please upload all required verification documents (*)');
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const handleNext = () => {
+    if (isStepValid(step)) {
+      setStep((step + 1) as OnboardingStep);
+    }
+  };
+
+  const handleSubmit = () => {
+    if (isStepValid(1) && isStepValid(2) && isStepValid(3) && isStepValid(5)) {
+      setSubmitted(true);
+    } else {
+      setValidationError('Please complete all required fields across all steps before submitting.');
+    }
+  };
 
   if (submitted) {
     return (
@@ -524,25 +577,33 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onOnboardingComp
             </>
           )}
 
+          {/* Validation Error Banner */}
+          {validationError && (
+            <div className="p-3.5 rounded-xl bg-error/10 border border-error/30 text-error text-xs font-semibold flex items-center gap-2">
+              <span className="material-symbols-outlined text-base">error</span>
+              <span>{validationError}</span>
+            </div>
+          )}
+
           {/* Navigation Buttons */}
           <div className="flex items-center justify-between pt-4 border-t border-outline-variant/20">
             <button
-              onClick={() => step > 1 && setStep((step - 1) as OnboardingStep)}
+              onClick={() => { setValidationError(''); step > 1 && setStep((step - 1) as OnboardingStep); }}
               className={`px-6 py-3 rounded-2xl font-semibold text-sm transition-all ${step === 1 ? 'invisible' : 'border border-outline-variant/40 text-secondary hover:bg-surface-container-low'}`}
             >
               ← Back
             </button>
             {step < 6 ? (
               <button
-                onClick={() => setStep((step + 1) as OnboardingStep)}
-                className="bg-primary text-on-primary px-8 py-3 rounded-2xl font-bold text-sm hover:bg-primary/90 transition-all shadow-md hover:shadow-lg"
+                onClick={handleNext}
+                className="bg-primary text-on-primary px-8 py-3 rounded-2xl font-bold text-sm hover:bg-primary/90 transition-all shadow-md hover:shadow-lg cursor-pointer"
               >
                 Continue →
               </button>
             ) : (
               <button
                 onClick={handleSubmit}
-                className="bg-primary text-on-primary px-8 py-3 rounded-2xl font-bold text-sm hover:bg-primary/90 transition-all shadow-md hover:shadow-lg"
+                className="bg-primary text-on-primary px-8 py-3 rounded-2xl font-bold text-sm hover:bg-primary/90 transition-all shadow-md hover:shadow-lg cursor-pointer"
               >
                 Submit for Verification
               </button>
