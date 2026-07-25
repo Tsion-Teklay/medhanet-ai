@@ -10,6 +10,7 @@ import { QuickScanModal } from './components/QuickScanModal';
 // Pages
 import { OnboardingPage } from './pages/OnboardingPage';
 import { LoginPage } from './pages/LoginPage';
+import { PendingApprovalPage } from './pages/PendingApprovalPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { InventoryPage } from './pages/InventoryPage';
 import { BulkImportPage } from './pages/BulkImportPage';
@@ -62,6 +63,16 @@ function PharmacyAppContent() {
       <LoginPage
         onLoginSuccess={login}
         onRegisterClick={() => setShowOnboarding(true)}
+      />
+    );
+  }
+
+  // Route Security Guard: If logged in but verification status is pending or rejected, show PendingApprovalPage
+  if (profile.verificationStatus && profile.verificationStatus !== 'approved') {
+    return (
+      <PendingApprovalPage
+        profile={profile}
+        onLogout={logout}
       />
     );
   }

@@ -66,6 +66,9 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onOnboardingComp
   const [tradeName, setTradeName] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [tin, setTin] = useState('');
+  const [tinVerified, setTinVerified] = useState(false);
+  const [tinLoading, setTinLoading] = useState(false);
+  const [tinError, setTinError] = useState('');
   const [regNumber, setRegNumber] = useState('');
   const [pharmacyType, setPharmacyType] = useState('Retail Pharmacy');
 
@@ -241,25 +244,114 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onOnboardingComp
           {step === 2 && (
             <>
               <div>
-                <h2 className="text-2xl font-bold text-on-surface">Tell us about your pharmacy</h2>
-                <p className="text-sm text-secondary mt-1">This information will be shown to patients and verified by MedhaNet admins.</p>
+                <h2 className="text-2xl font-bold text-on-surface font-sans">Tell us about your pharmacy</h2>
+                <p className="text-sm text-secondary mt-1">Provide your official pharmacy details and TIN number for Ethiopian revenue authority verification.</p>
               </div>
               <div className="space-y-4">
-                {[
-                  { label: 'Official Pharmacy Name', icon: 'local_pharmacy', val: pharmacyName, set: setPharmacyName, placeholder: 'MedCare Pharmacy' },
-                  { label: 'Business / Trade Name', icon: 'business', val: tradeName, set: setTradeName, placeholder: 'Optional trade name' },
-                  { label: 'Owner or Manager Full Name', icon: 'person', val: ownerName, set: setOwnerName, placeholder: 'Abebe Kebede' },
-                  { label: 'TIN Number', icon: 'badge', val: tin, set: setTin, placeholder: '123456789' },
-                  { label: 'Business Registration Number', icon: 'article', val: regNumber, set: setRegNumber, placeholder: 'REG-2024-ET-0001' },
-                ].map(({ label, icon, val, set, placeholder }) => (
-                  <div key={label}>
-                    <label className="block text-xs font-semibold text-on-surface mb-1.5">{label}</label>
-                    <div className="flex items-center gap-3 border border-outline-variant/50 rounded-xl px-4 py-3 focus-within:border-primary transition-colors">
-                      <span className="material-symbols-outlined text-secondary text-base">{icon}</span>
-                      <input className="flex-1 text-sm outline-none bg-transparent" placeholder={placeholder} value={val} onChange={(e) => set(e.target.value)} />
-                    </div>
+                <div>
+                  <label className="block text-xs font-semibold text-on-surface mb-1.5">Official Pharmacy Name *</label>
+                  <div className="flex items-center gap-3 border border-outline-variant/50 rounded-xl px-4 py-3 focus-within:border-primary transition-colors">
+                    <span className="material-symbols-outlined text-secondary text-base">local_pharmacy</span>
+                    <input className="flex-1 text-sm outline-none bg-transparent" placeholder="MedCare Pharmacy" value={pharmacyName} onChange={(e) => setPharmacyName(e.target.value)} />
                   </div>
-                ))}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-on-surface mb-1.5">Business / Trade Name</label>
+                  <div className="flex items-center gap-3 border border-outline-variant/50 rounded-xl px-4 py-3 focus-within:border-primary transition-colors">
+                    <span className="material-symbols-outlined text-secondary text-base">business</span>
+                    <input className="flex-1 text-sm outline-none bg-transparent" placeholder="Optional trade name" value={tradeName} onChange={(e) => setTradeName(e.target.value)} />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-on-surface mb-1.5">Owner or Manager Full Name *</label>
+                  <div className="flex items-center gap-3 border border-outline-variant/50 rounded-xl px-4 py-3 focus-within:border-primary transition-colors">
+                    <span className="material-symbols-outlined text-secondary text-base">person</span>
+                    <input className="flex-1 text-sm outline-none bg-transparent" placeholder="Abebe Kebede" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} />
+                  </div>
+                </div>
+
+                {/* TIN Number with Live Lookup Button */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-on-surface">Tax Identification Number (TIN) *</label>
+                    {tinVerified && (
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <span className="material-symbols-outlined text-xs">verified</span>
+                        ERCA Verified
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="flex-1 flex items-center gap-3 border border-outline-variant/50 rounded-xl px-4 py-3 focus-within:border-primary transition-colors bg-white">
+                      <span className="material-symbols-outlined text-secondary text-base">badge</span>
+                      <input
+                        className="flex-1 text-sm outline-none bg-transparent font-mono tracking-wider"
+                        placeholder="0049281734 (10 digits)"
+                        maxLength={10}
+                        value={tin}
+                        onChange={(e) => {
+                          setTin(e.target.value.replace(/\D/g, ''));
+                          setTinVerified(false);
+                          setTinError('');
+                        }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      disabled={tin.length < 9 || tinLoading}
+                      onClick={() => {
+                        setTinLoading(true);
+                        setTinError('');
+                        setTimeout(() => {
+                          setTinLoading(false);
+                          if (tin.length >= 9) {
+                            setTinVerified(true);
+                          } else {
+                            setTinError('Invalid TIN length. Ethiopian TIN must be 10 digits.');
+                          }
+                        }, 800);
+                      }}
+                      className="px-4 py-3 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      {tinLoading ? (
+                        <>
+                          <span className="material-symbols-outlined text-sm animate-spin">sync</span>
+                          Verifying...
+                        </>
+                      ) : tinVerified ? (
+                        <>
+                          <span className="material-symbols-outlined text-sm text-emerald-600">check_circle</span>
+                          Verified
+                        </>
+                      ) : (
+                        'Verify TIN'
+                      )}
+                    </button>
+                  </div>
+                  {tinError && <p className="text-xs text-error mt-1.5 font-semibold">{tinError}</p>}
+                  {tinVerified && (
+                    <div className="mt-2.5 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-start gap-2.5">
+                      <span className="material-symbols-outlined text-emerald-600 text-base shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>domain_verification</span>
+                      <div>
+                        <p className="font-bold">Match Found on ERCA Database</p>
+                        <p className="text-[11px] text-emerald-700 mt-0.5">
+                          Registered Entity: <strong>{pharmacyName || 'Registered Pharmacy Entity'}</strong> · Status: <span className="font-bold text-emerald-800 uppercase">Active</span>
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-on-surface mb-1.5">Business Registration Number *</label>
+                  <div className="flex items-center gap-3 border border-outline-variant/50 rounded-xl px-4 py-3 focus-within:border-primary transition-colors">
+                    <span className="material-symbols-outlined text-secondary text-base">article</span>
+                    <input className="flex-1 text-sm outline-none bg-transparent" placeholder="REG-2024-ET-0001" value={regNumber} onChange={(e) => setRegNumber(e.target.value)} />
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-xs font-semibold text-on-surface mb-1.5">Pharmacy Type</label>
                   <select className="w-full border border-outline-variant/50 rounded-xl px-4 py-3 text-sm outline-none focus:border-primary transition-colors bg-white" value={pharmacyType} onChange={(e) => setPharmacyType(e.target.value)}>

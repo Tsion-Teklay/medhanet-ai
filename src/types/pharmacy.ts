@@ -68,6 +68,9 @@ export interface PharmacyProfile {
   staffTitle: string;
   avatarUrl: string;
   isOpen?: boolean;
+  tinNumber?: string;
+  verificationStatus?: 'approved' | 'pending_verification' | 'rejected';
+  rejectionReason?: string;
 }
 
 export interface AnalyticsSummary {
