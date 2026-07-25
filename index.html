@@ -1,17 +1,107 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="light">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230284c7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z'/><path d='m8.5 8.5 7 7'/></svg>" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23006b2c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z'/><path d='m8.5 8.5 7 7'/></svg>" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="MedhaNet AI Pharmacy Management & Fulfillment Portal - Advanced Healthcare Logistics" />
     <title>MedhaNet AI - Pharmacy Portal</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+              "on-secondary": "#ffffff",
+              "on-tertiary-fixed-variant": "#384953",
+              "on-tertiary-fixed": "#0c1e26",
+              "on-secondary-container": "#626567",
+              "surface-container": "#e5eeff",
+              "primary": "#006b2c",
+              "inverse-on-surface": "#eaf1ff",
+              "surface-tint": "#006e2d",
+              "secondary-fixed": "#e0e3e5",
+              "on-error-container": "#93000a",
+              "on-tertiary-container": "#fbfcff",
+              "secondary": "#5c5f61",
+              "on-primary-fixed": "#002109",
+              "error-container": "#ffdad6",
+              "tertiary": "#4e5e68",
+              "surface-variant": "#d3e4fe",
+              "secondary-container": "#e0e3e5",
+              "on-primary": "#ffffff",
+              "surface-bright": "#f8f9ff",
+              "tertiary-fixed": "#d3e5f1",
+              "tertiary-fixed-dim": "#b7c9d5",
+              "primary-container": "#00873a",
+              "on-primary-container": "#f7fff2",
+              "surface-container-high": "#dce9ff",
+              "on-background": "#0b1c30",
+              "on-primary-fixed-variant": "#005320",
+              "outline": "#6e7b6c",
+              "surface-container-lowest": "#ffffff",
+              "tertiary-container": "#667781",
+              "outline-variant": "#bdcaba",
+              "surface-container-low": "#eff4ff",
+              "on-error": "#ffffff",
+              "primary-fixed": "#7ffc97",
+              "primary-fixed-dim": "#62df7d",
+              "surface": "#f8f9ff",
+              "on-secondary-fixed": "#191c1e",
+              "error": "#ba1a1a",
+              "on-secondary-fixed-variant": "#444749",
+              "on-surface-variant": "#3e4a3d",
+              "on-surface": "#0b1c30",
+              "surface-container-highest": "#d3e4fe",
+              "background": "#f8f9ff"
+            },
+            "borderRadius": {
+              "DEFAULT": "0.25rem",
+              "lg": "0.5rem",
+              "xl": "0.75rem",
+              "full": "9999px"
+            },
+            "spacing": {
+              "unit": "4px",
+              "margin-mobile": "16px",
+              "margin-desktop": "32px",
+              "gutter": "24px",
+              "container-max": "1280px"
+            },
+            "fontFamily": {
+              "sans": ["Inter", "sans-serif"],
+              "label-sm": ["Inter", "sans-serif"],
+              "headline-lg": ["Inter", "sans-serif"],
+              "headline-lg-mobile": ["Inter", "sans-serif"],
+              "title-md": ["Inter", "sans-serif"],
+              "label-md": ["Inter", "sans-serif"],
+              "body-md": ["Inter", "sans-serif"],
+              "body-lg": ["Inter", "sans-serif"],
+              "display-lg": ["Inter", "sans-serif"]
+            },
+            "fontSize": {
+              "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+              "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+              "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+              "title-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+              "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "500"}],
+              "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+              "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+              "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
+
