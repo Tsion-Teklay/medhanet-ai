@@ -1,3 +1,4 @@
+import "express-async-errors";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -6,6 +7,8 @@ import rateLimit from "express-rate-limit";
 import authRoutes from "./routes/auth.js";
 import medicineRoutes from "./routes/medicines.js";
 import searchRoutes from "./routes/search.js";
+import pharmacyRoutes from "./routes/pharmacy.js";
+import adminRoutes from "./routes/admin.js";
 
 dotenv.config();
 
@@ -23,6 +26,8 @@ app.get("/api/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/medicines", medicineRoutes);
 app.use("/api/search", searchRoutes);
+app.use("/api/pharmacy", pharmacyRoutes);
+app.use("/api/admin", adminRoutes);
 
 app.use((req, res) => res.status(404).json({ error: "Not found" }));
 

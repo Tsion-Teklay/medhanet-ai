@@ -13,33 +13,33 @@ interface PharmacyContextType {
   notifications: Notification[];
   toastMessage: string | null;
   showToast: (msg: string) => void;
-  login: (businessName: string) => Promise<void>;
+  login: (phone: string, password: string) => Promise<void>;
   logout: () => void;
   addMedicine: (newMed: Omit<Medicine, 'id'>) => Promise<void>;
   updateStock: (id: string, newStock: number) => Promise<void>;
   deleteMedicine: (id: string) => Promise<void>;
+  refreshMedicines: () => Promise<void>;
   restockByName: (name: string) => Promise<void>;
   completeReservation: (id: string) => Promise<void>;
   updatePrescriptionStatus: (id: string, status: PrescriptionRequest['status'], meds: PrescriptionRequest['medicines']) => Promise<void>;
   markNotificationRead: (id: string) => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
-  togglePharmacyStatus: (isOpen: boolean) => void;
+  togglePharmacyStatus: (isOpen: boolean) => Promise<void>;
 }
 
 const PharmacyContext = createContext<PharmacyContextType | undefined>(undefined);
 
 export const PharmacyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const isLoginPagePath = typeof window !== 'undefined' && window.location.pathname === '/login';
-  const [isLoggedIn, setIsLoggedIn] = useState(!isLoginPagePath);
+  const [isLoggedIn, setIsLoggedIn] = useState(PharmacyAPI.isAuthenticated());
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const [profile, setProfile] = useState<PharmacyProfile>({
-    name: 'Bole Medhanealem Pharmacy',
-    location: 'Bole Sub City, Woreda 03',
+    name: '',
+    location: '',
     city: 'Addis Ababa, ET',
     staffTitle: 'Pharmacy Manager',
-    avatarUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBRQ-L0WYS_jqoRZiKtF-Crh5C_RVM9Vt1VoGtd_LNauKWuh0dfZ3doJnabFMVtbFTgUF69XCFRwrG9ijGpAiCQQEghDJNew2qchFnoPU7EgYBDbV-u8fV_rMEM6Gm0J_nKnjj1Rb7t_9w047re428wWLM2bECSCerwW4r3xkcGcM9ub0uOcegu0PtcU1mfirqz45F3V09Rgef9sT3b5yutPb3nofC8C_vNcXlirNKw4YQIBbwKI-aXxa4IygBWerpspyF5KOKWmZA',
+    avatarUrl: '',
     isOpen: true
   });
 
@@ -48,39 +48,47 @@ export const PharmacyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [prescriptions, setPrescriptions] = useState<PrescriptionRequest[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  // Initial Fetch from API service
+  // Restore the session from a stored token, then load the pharmacy's own data.
   useEffect(() => {
-    PharmacyAPI.getMedicines().then(setMedicines);
+    if (!isLoggedIn) return;
+
+    PharmacyAPI.getProfile()
+      .then(setProfile)
+      .catch(() => {
+        PharmacyAPI.logout();
+        setIsLoggedIn(false);
+      });
+    PharmacyAPI.getMedicines().then(setMedicines).catch(() => setMedicines([]));
     PharmacyAPI.getReservations().then(setReservations);
     PharmacyAPI.getPrescriptions().then(setPrescriptions);
     PharmacyAPI.getNotifications().then(setNotifications);
-  }, []);
+  }, [isLoggedIn]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const login = async (businessName: string) => {
-    const res = await PharmacyAPI.login(businessName);
-    if (res.success) {
-      setProfile(res.profile);
-      setIsLoggedIn(true);
-      if (window.location.pathname === '/login') {
-        window.history.pushState({}, '', '/');
-      }
-      showToast(`Welcome back, ${res.profile.name}`);
+  const login = async (phone: string, password: string) => {
+    const res = await PharmacyAPI.login(phone, password);
+    setProfile(res.profile);
+    setIsLoggedIn(true);
+    if (window.location.pathname === '/login') {
+      window.history.pushState({}, '', '/');
     }
+    showToast(`Welcome back, ${res.profile.name}`);
   };
 
   const logout = () => {
+    PharmacyAPI.logout();
     setIsLoggedIn(false);
+    setMedicines([]);
     window.history.pushState({}, '', '/login');
   };
 
   const addMedicine = async (newMed: Omit<Medicine, 'id'>) => {
     const created = await PharmacyAPI.addMedicine(newMed);
-    setMedicines((prev) => [created, ...prev]);
+    setMedicines((prev) => [created, ...prev.filter((m) => m.id !== created.id)]);
     showToast(`Added ${created.name} to inventory!`);
   };
 
@@ -98,6 +106,10 @@ export const PharmacyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setMedicines((prev) => prev.filter((m) => m.id !== id));
       showToast('Medicine removed from inventory.');
     }
+  };
+
+  const refreshMedicines = async () => {
+    setMedicines(await PharmacyAPI.getMedicines());
   };
 
   const restockByName = async (name: string) => {
@@ -139,8 +151,8 @@ export const PharmacyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  const togglePharmacyStatus = (isOpen: boolean) => {
-    setProfile((prev) => ({ ...prev, isOpen }));
+  const togglePharmacyStatus = async (isOpen: boolean) => {
+    setProfile(await PharmacyAPI.setOpen(isOpen));
     showToast(`Pharmacy status set to: ${isOpen ? 'OPEN' : 'CLOSED'}`);
   };
 
@@ -162,6 +174,7 @@ export const PharmacyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         addMedicine,
         updateStock,
         deleteMedicine,
+        refreshMedicines,
         restockByName,
         completeReservation,
         updatePrescriptionStatus,
