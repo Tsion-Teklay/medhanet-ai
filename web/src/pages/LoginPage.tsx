@@ -1,28 +1,32 @@
 import React, { useState } from 'react';
 
 interface LoginPageProps {
-  onLoginSuccess: (businessName: string) => void;
+  onLoginSuccess: (phone: string, password: string) => Promise<void>;
   onRegisterClick?: () => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onRegisterClick }) => {
-  const [businessName, setBusinessName] = useState('');
-  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setShowToast(true);
+    setError(null);
 
-    setTimeout(() => {
+    try {
+      await onLoginSuccess(phone, password);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login failed');
+    } finally {
       setIsLoading(false);
       setShowToast(false);
-      onLoginSuccess(businessName || 'Bole Medhanealem Pharmacy');
-    }, 2000);
+    }
   };
 
   return (
@@ -74,50 +78,26 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onRegister
               </div>
 
               <form className="space-y-6" id="loginForm" onSubmit={handleSubmit}>
-                {/* Business Name */}
+                {/* Phone Number */}
                 <div className="space-y-2">
-                  <label className="block font-label-md text-on-surface-variant" htmlFor="business-name">
-                    Business Name
+                  <label className="block font-label-md text-on-surface-variant" htmlFor="phone">
+                    Phone Number
                   </label>
                   <div className="relative group">
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                       <span className="material-symbols-outlined text-on-surface-variant group-focus-within:text-primary transition-colors">
-                        store
+                        call
                       </span>
                     </div>
                     <input
                       className="w-full pl-11 pr-4 h-[48px] bg-surface-container-low border-b-2 border-transparent focus:border-primary focus:ring-0 transition-all font-body-md rounded-t-lg outline-none text-on-surface"
-                      id="business-name"
-                      name="business-name"
-                      placeholder="Enter pharmacy name"
+                      id="phone"
+                      name="phone"
+                      placeholder="0912345678"
                       required
-                      type="text"
-                      value={businessName}
-                      onChange={(e) => setBusinessName(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                {/* Email */}
-                <div className="space-y-2">
-                  <label className="block font-label-md text-on-surface-variant" htmlFor="email">
-                    Email Address
-                  </label>
-                  <div className="relative group">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <span className="material-symbols-outlined text-on-surface-variant group-focus-within:text-primary transition-colors">
-                        mail
-                      </span>
-                    </div>
-                    <input
-                      className="w-full pl-11 pr-4 h-[48px] bg-surface-container-low border-b-2 border-transparent focus:border-primary focus:ring-0 transition-all font-body-md rounded-t-lg outline-none text-on-surface"
-                      id="email"
-                      name="email"
-                      placeholder="email@pharmacy.com"
-                      required
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
                     />
                   </div>
                 </div>
@@ -166,6 +146,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onRegister
                     </button>
                   </div>
                 </div>
+
+                {error && (
+                  <div className="flex items-center gap-2 bg-error-container text-on-error-container rounded-lg px-4 py-3 font-label-md">
+                    <span className="material-symbols-outlined text-[20px]">error</span>
+                    <span>{error}</span>
+                  </div>
+                )}
 
                 {/* Login Button */}
                 <button

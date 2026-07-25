@@ -1,0 +1,15 @@
+-- AlterTable
+ALTER TABLE `Inventory` ADD COLUMN `batchNo` VARCHAR(191) NULL,
+    ADD COLUMN `minStock` INTEGER NOT NULL DEFAULT 10,
+    ADD COLUMN `updatedAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3);
+
+-- AlterTable
+ALTER TABLE `Medicine` ADD COLUMN `dosageForm` VARCHAR(191) NULL,
+    ADD COLUMN `manufacturer` VARCHAR(191) NULL,
+    ADD COLUMN `prescriptionRequired` BOOLEAN NOT NULL DEFAULT false;
+
+-- AlterTable
+ALTER TABLE `Pharmacy` ADD COLUMN `isOpen` BOOLEAN NOT NULL DEFAULT true,
+    ADD COLUMN `rejectionReason` TEXT NULL,
+    ADD COLUMN `reviewedAt` DATETIME(3) NULL,
+    ADD COLUMN `tinNumber` VARCHAR(191) NULL;

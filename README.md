@@ -47,3 +47,23 @@ Seeded by `npm run seed`, all with password `password123`:
 | `GET` | `/api/medicines?q=` | catalogue browse |
 | `GET` | `/api/medicines/:id` | |
 | `GET` | `/api/search?q=&lat=&lng=&radiusKm=` | nearby verified pharmacies with stock |
+
+Pharmacy portal (role `PHARMACY`, own pharmacy only):
+
+| Method | Path | Notes |
+|---|---|---|
+| `POST` | `/api/pharmacy` | onboarding: create the (PENDING) pharmacy |
+| `GET` `PATCH` | `/api/pharmacy/me` | profile, opening hours, open/closed |
+| `GET` `POST` | `/api/pharmacy/inventory` | list / add stock |
+| `PATCH` `DELETE` | `/api/pharmacy/inventory/:id` | update quantity, price, expiry / remove |
+| `POST` | `/api/pharmacy/inventory/bulk` | `{ items: [...] }` from a parsed CSV |
+| `GET` | `/api/pharmacy/stats` | inventory value, low stock, expiring soon |
+
+Admin (role `ADMIN`):
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/admin/pharmacies?status=&q=` | verification queue |
+| `GET` | `/api/admin/pharmacies/:id` | licence details for review |
+| `PATCH` | `/api/admin/pharmacies/:id/status` | `{ status, rejectionReason? }` |
+| `GET` | `/api/admin/stats` | platform totals |

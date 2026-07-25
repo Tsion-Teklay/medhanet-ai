@@ -123,6 +123,8 @@ async function main() {
           pharmacyId: pharmacy.id,
           medicineId: medicine.id,
           quantity: ((i * 13 + p * 7) % 120) + 5,
+          minStock: 20,
+          batchNo: `B-${2026}${String((i + p) % 12 + 1).padStart(2, "0")}-${i + 1}`,
           price: priceFor(medicine.category, i + p),
           expiryDate: new Date(Date.now() + (180 + ((i * 11) % 400)) * 86_400_000),
         })),

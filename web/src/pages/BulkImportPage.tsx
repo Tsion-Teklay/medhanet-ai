@@ -1,4 +1,7 @@
 import React, { useState, useRef } from 'react';
+import { PharmacyAPI } from '../services/api';
+import type { InventoryInput } from '../services/api';
+import { usePharmacy } from '../context/PharmacyContext';
 
 interface BulkRow {
   id: number;
@@ -16,18 +19,99 @@ interface BulkRow {
   errors: string[];
 }
 
-// Sample preview rows (simulates parsed CSV)
-const SAMPLE_ROWS: BulkRow[] = [
-  { id: 1, medicine_name: 'Paracetamol', generic_name: 'Acetaminophen', brand_name: 'Panadol', category: 'Analgesic', strength: '500mg', dosage_form: 'Tablet', quantity: '200', price: '15.00', batch_number: 'B-2025-001', expiry_date: '2027-12-01', status: 'valid', errors: [] },
-  { id: 2, medicine_name: 'Amoxicillin', generic_name: 'Amoxicillin Trihydrate', brand_name: 'Amoxil', category: 'Antibiotic', strength: '500mg', dosage_form: 'Capsule', quantity: '150', price: '120.00', batch_number: 'B-2025-002', expiry_date: '2026-08-15', status: 'warning', errors: ['Expiry date is within 12 months'] },
-  { id: 3, medicine_name: '', generic_name: 'Ibuprofen', brand_name: 'Brufen', category: 'Analgesic', strength: '400mg', dosage_form: 'Tablet', quantity: '100', price: '22.00', batch_number: 'B-2025-003', expiry_date: '2028-03-01', status: 'error', errors: ['Medicine name is required'] },
-  { id: 4, medicine_name: 'Metformin', generic_name: 'Metformin HCl', brand_name: 'Glucophage', category: 'Chronic Care', strength: '850mg', dosage_form: 'Tablet', quantity: '80', price: '', batch_number: 'B-2025-004', expiry_date: '2027-06-20', status: 'error', errors: ['Price is required'] },
-  { id: 5, medicine_name: 'Insulin NPH', generic_name: 'Isophane Insulin', brand_name: 'Humulin N', category: 'Emergency', strength: '100 IU/ml', dosage_form: 'Injection', quantity: '40', price: '340.00', batch_number: 'B-2025-005', expiry_date: '2026-09-10', status: 'warning', errors: ['Expiry date is within 12 months'] },
-];
-
 type ImportStep = 'upload' | 'validate' | 'preview' | 'success';
 
+const COLUMNS = [
+  'medicine_name',
+  'generic_name',
+  'brand_name',
+  'category',
+  'strength',
+  'dosage_form',
+  'quantity',
+  'price',
+  'batch_number',
+  'expiry_date',
+] as const;
+
+function splitCsvLine(line: string): string[] {
+  const cells: string[] = [];
+  let cell = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        cell += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      cells.push(cell.trim());
+      cell = '';
+    } else {
+      cell += char;
+    }
+  }
+  cells.push(cell.trim());
+  return cells;
+}
+
+function validate(row: BulkRow): BulkRow {
+  const errors: string[] = [];
+  if (!row.medicine_name) errors.push('Medicine name is required');
+  if (!row.category) errors.push('Category is required');
+  if (!row.strength) errors.push('Strength is required');
+  if (row.quantity === '' || Number.isNaN(Number(row.quantity))) errors.push('Quantity must be a number');
+  if (row.price === '' || Number.isNaN(Number(row.price))) errors.push('Price is required');
+
+  const expiry = new Date(row.expiry_date);
+  if (!row.expiry_date || Number.isNaN(expiry.getTime())) {
+    errors.push('Expiry date must be YYYY-MM-DD');
+  } else if (expiry.getTime() < Date.now()) {
+    errors.push('Expiry date is in the past');
+  }
+
+  if (errors.length) return { ...row, status: 'error', errors };
+
+  const withinAYear = expiry.getTime() < Date.now() + 365 * 24 * 60 * 60 * 1000;
+  return withinAYear
+    ? { ...row, status: 'warning', errors: ['Expiry date is within 12 months'] }
+    : { ...row, status: 'valid', errors: [] };
+}
+
+function parseCsv(text: string): BulkRow[] {
+  const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
+  if (lines.length < 2) return [];
+
+  const headers = splitCsvLine(lines[0]).map((h) => h.toLowerCase().replace(/\s+/g, '_'));
+  return lines.slice(1).map((line, index) => {
+    const cells = splitCsvLine(line);
+    const values = Object.fromEntries(
+      COLUMNS.map((column) => [column, cells[headers.indexOf(column)] ?? ''])
+    ) as Record<(typeof COLUMNS)[number], string>;
+    return validate({ id: index + 1, status: 'valid', errors: [], ...values });
+  });
+}
+
+function toInventoryInput(row: BulkRow): InventoryInput {
+  return {
+    name: row.brand_name || row.medicine_name,
+    genericName: row.generic_name || undefined,
+    category: row.category,
+    dosage: row.strength,
+    dosageForm: row.dosage_form || undefined,
+    stock: Number(row.quantity),
+    unitPriceETB: Number(row.price),
+    batchNo: row.batch_number || undefined,
+    expiryDate: row.expiry_date,
+  };
+}
+
 export const BulkImportPage: React.FC = () => {
+  const { refreshMedicines, showToast } = usePharmacy();
   const [importStep, setImportStep] = useState<ImportStep>('upload');
   const [isDragging, setIsDragging] = useState(false);
   const [fileName, setFileName] = useState('');
@@ -40,36 +124,55 @@ export const BulkImportPage: React.FC = () => {
   const warningCount = rows.filter((r) => r.status === 'warning').length;
   const errorCount = rows.filter((r) => r.status === 'error').length;
 
-  const simulateFileLoad = (name: string) => {
-    setFileName(name);
+  const loadFile = async (file: File) => {
+    setFileName(file.name);
     setIsProcessing(true);
-    setTimeout(() => {
-      setRows(SAMPLE_ROWS);
-      setIsProcessing(false);
-      setImportStep('validate');
-    }, 1400);
+    const parsed = parseCsv(await file.text());
+    setRows(parsed);
+    setIsProcessing(false);
+    if (parsed.length === 0) {
+      showToast('No rows found — export your sheet as CSV with the required columns.');
+      return;
+    }
+    setImportStep('validate');
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files[0];
-    if (file) simulateFileLoad(file.name);
+    if (file) loadFile(file);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) simulateFileLoad(file.name);
+    if (file) loadFile(file);
   };
 
-  const handleImport = () => {
+  const handleImport = async () => {
     setIsProcessing(true);
-    const validRows = rows.filter((r) => r.status !== 'error').length;
-    setTimeout(() => {
-      setImportedCount(validRows);
-      setIsProcessing(false);
+    try {
+      const items = rows.filter((r) => r.status !== 'error').map(toInventoryInput);
+      const result = await PharmacyAPI.bulkImport(items);
+      setImportedCount(result.imported);
+      if (result.failed > 0) showToast(`${result.failed} rows were rejected by the server.`);
+      await refreshMedicines();
       setImportStep('success');
-    }, 1800);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Import failed');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const downloadTemplate = () => {
+    const csv = `${COLUMNS.join(',')}\nParacetamol,Acetaminophen,Panadol,Analgesic,500mg,Tablet,200,15.00,B-2026-001,2028-12-01\n`;
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'medhanet-inventory-template.csv';
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const reset = () => {
@@ -90,16 +193,16 @@ export const BulkImportPage: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl md:text-3xl font-bold text-on-surface tracking-tight">Bulk Inventory Import</h2>
-          <p className="text-sm text-secondary mt-0.5">Import hundreds of medicines at once using a CSV or Excel file.</p>
+          <p className="text-sm text-secondary mt-0.5">Import hundreds of medicines at once using a CSV file.</p>
         </div>
-        <a
-          href="#"
-          onClick={(e) => e.preventDefault()}
-          className="flex items-center gap-2 border border-primary/30 text-primary px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-primary/5 transition-colors"
+        <button
+          type="button"
+          onClick={downloadTemplate}
+          className="flex items-center gap-2 border border-primary/30 text-primary px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-primary/5 transition-colors cursor-pointer"
         >
           <span className="material-symbols-outlined text-base">download</span>
           Download Template
-        </a>
+        </button>
       </div>
 
       {/* Step Progress */}

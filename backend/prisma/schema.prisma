@@ -29,7 +29,11 @@ model Pharmacy {
   lng        Float
   licenseUrl String?     @db.Text
   licenseNo  String?
+  tinNumber  String?
   status     String      @default("PENDING")
+  rejectionReason String? @db.Text
+  reviewedAt DateTime?
+  isOpen     Boolean     @default(true)
   openTime   String      @default("08:00")
   closeTime  String      @default("20:00")
   createdAt  DateTime    @default(now())
@@ -44,6 +48,9 @@ model Medicine {
   genericName String
   category    String
   strength    String
+  dosageForm  String?
+  manufacturer String?
+  prescriptionRequired Boolean @default(false)
   description String?     @db.Text
   inventory   Inventory[]
 
@@ -58,8 +65,11 @@ model Inventory {
   pharmacy     Pharmacy      @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
   medicine     Medicine      @relation(fields: [medicineId], references: [id])
   quantity     Int
+  minStock     Int           @default(10)
   price        Float
+  batchNo      String?
   expiryDate   DateTime
+  updatedAt    DateTime      @default(now()) @updatedAt
   reservations Reservation[]
 
   @@unique([pharmacyId, medicineId])
