@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { setOnUnauthorized } from './src/services/api';
 import AuthScreen from './src/screens/AuthScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import ReservationsScreen from './src/screens/ReservationsScreen';
@@ -9,8 +10,15 @@ import PrescriptionScanScreen from './src/screens/PrescriptionScanScreen';
 import AIChatScreen from './src/screens/AIChatScreen';
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeTab, setActiveTab] = useState('home'); // 'home' | 'reservations' | 'scan' | 'chat'
+
+  useEffect(() => {
+    setOnUnauthorized(() => {
+      setIsAuthenticated(false);
+      setActiveTab('home');
+    });
+  }, []);
 
   if (!isAuthenticated) {
     return <AuthScreen onLoginSuccess={() => setIsAuthenticated(true)} />;

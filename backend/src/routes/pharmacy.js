@@ -208,4 +208,49 @@ router.get("/stats", loadOwnPharmacy, async (req, res) => {
   });
 });
 
+/** Prescriptions patients have forwarded to this pharmacy for a human read. */
+router.get("/prescriptions", loadOwnPharmacy, async (req, res) => {
+  const rows = await prisma.prescription.findMany({
+    where: { pharmacyId: req.pharmacy.id },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+    include: { user: { select: { id: true, name: true, phone: true } } },
+  });
+
+  res.json(
+    rows.map((r) => ({
+      id: r.id,
+      patient: r.user,
+      imageUrl: r.imageUrl,
+      extracted: r.extracted,
+      patientNote: r.patientNote,
+      pharmacyNote: r.pharmacyNote,
+      status: r.status,
+      reviewedAt: r.reviewedAt,
+      createdAt: r.createdAt,
+    }))
+  );
+});
+
+const rxReviewSchema = z.object({
+  status: z.enum(["UNDER_REVIEW", "AVAILABLE", "PARTIALLY_AVAILABLE", "UNAVAILABLE"]),
+  pharmacyNote: z.string().max(1000).optional(),
+});
+
+router.patch("/prescriptions/:id", loadOwnPharmacy, async (req, res) => {
+  const parsed = rxReviewSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
+
+  const existing = await prisma.prescription.findUnique({ where: { id: req.params.id } });
+  if (!existing || existing.pharmacyId !== req.pharmacy.id) {
+    return res.status(404).json({ error: "Prescription not found" });
+  }
+
+  const updated = await prisma.prescription.update({
+    where: { id: existing.id },
+    data: { ...parsed.data, reviewedAt: new Date() },
+  });
+  res.json(updated);
+});
+
 export default router;

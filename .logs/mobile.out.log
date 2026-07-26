@@ -1,0 +1,7 @@
+env: load .env
+env: export EXPO_PUBLIC_API_URL REACT_NATIVE_PACKAGER_HOSTNAME
+Starting project at C:\Users\HP\Documents\testttttttttt\medhanet-ai\mobile
+Starting Metro Bundler
+warning: Bundler cache is empty, rebuilding (this may take a minute)
+Waiting on http://localhost:8081
+Logs for your project will appear below.

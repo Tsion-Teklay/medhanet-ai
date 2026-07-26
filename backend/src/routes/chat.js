@@ -133,21 +133,23 @@ router.post("/message", optionalAuth, async (req, res, next) => {
 /** Transcribe voice audio recording */
 router.post("/voice", optionalAuth, async (req, res, next) => {
   try {
-    const { audio_base64, text } = req.body;
+    const { audio_base64, text, mime_type } = req.body;
     const aiServiceUrl = process.env.AI_SERVICE_URL || "http://localhost:8000";
 
     try {
       const response = await axios.post(`${aiServiceUrl}/voice/transcribe`, {
         audio_base64,
         text,
-      }, { timeout: 15000 });
+        mime_type,
+      }, { timeout: 45000 });
 
       return res.json(response.data);
     } catch (aiErr) {
-      return res.json({
-        query: text || "What are the dosage instructions for Paracetamol?",
-        status: "ok",
-        transcribedFromAudio: true,
+      console.warn("AI Service transcription error:", aiErr.message);
+      return res.status(503).json({
+        query: "",
+        status: "error",
+        error: "Speech service unavailable",
       });
     }
   } catch (err) {

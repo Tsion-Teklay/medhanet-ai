@@ -12,7 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
+import { File } from 'expo-file-system';
 import { api } from '../services/api';
 
 const QUICK_SUGGESTIONS = [
@@ -21,6 +21,42 @@ const QUICK_SUGGESTIONS = [
   'I have mild fever and headache',
   'What is Coartem dosage for adults?',
 ];
+
+// Gemini only accepts a fixed set of audio containers, so record straight into
+// one of them rather than the .m4a the HIGH_QUALITY preset produces.
+const RECORDING_OPTIONS = {
+  isMeteringEnabled: false,
+  android: {
+    extension: '.aac',
+    outputFormat: Audio.AndroidOutputFormat.AAC_ADTS,
+    audioEncoder: Audio.AndroidAudioEncoder.AAC,
+    sampleRate: 16000,
+    numberOfChannels: 1,
+    bitRate: 64000,
+  },
+  ios: {
+    extension: '.wav',
+    outputFormat: Audio.IOSOutputFormat.LINEARPCM,
+    audioQuality: Audio.IOSAudioQuality.HIGH,
+    sampleRate: 16000,
+    numberOfChannels: 1,
+    bitRate: 256000,
+    linearPCMBitDepth: 16,
+    linearPCMIsBigEndian: false,
+    linearPCMIsFloat: false,
+  },
+  web: {
+    mimeType: 'audio/webm',
+    bitsPerSecond: 64000,
+  },
+};
+
+const MIME_BY_EXTENSION = {
+  aac: 'audio/aac',
+  wav: 'audio/wav',
+  m4a: 'audio/mp4',
+  webm: 'audio/webm',
+};
 
 export default function AIChatScreen({ onClose }) {
   const [messages, setMessages] = useState([
@@ -88,6 +124,7 @@ export default function AIChatScreen({ onClose }) {
   };
 
   const startVoiceRecording = async () => {
+    if (recordingRef.current) return;
     try {
       const permission = await Audio.requestPermissionsAsync();
       if (!permission.granted) return;
@@ -97,45 +134,58 @@ export default function AIChatScreen({ onClose }) {
         playsInSilentModeIOS: true,
       });
 
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
+      const { recording } = await Audio.Recording.createAsync(RECORDING_OPTIONS);
       recordingRef.current = recording;
       setIsRecording(true);
     } catch (err) {
       console.warn('Voice recording error:', err.message);
+      recordingRef.current = null;
+      setIsRecording(false);
     }
   };
 
-  const stopVoiceRecording = async () => {
-    if (!recordingRef.current) return;
-    setIsRecording(false);
-    try {
-      await recordingRef.current.stopAndUnloadAsync();
-      const uri = recordingRef.current.getURI();
-      recordingRef.current = null;
+  const addAssistantMessage = (content) => {
+    setMessages((prev) => [
+      ...prev,
+      { id: Date.now().toString(), role: 'assistant', content },
+    ]);
+  };
 
-      let base64Audio = null;
-      if (uri) {
-        try {
-          base64Audio = await FileSystem.readAsStringAsync(uri, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
-        } catch (fsErr) {
-          console.warn('FileSystem read error:', fsErr.message);
-        }
+  const stopVoiceRecording = async () => {
+    const recording = recordingRef.current;
+    if (!recording) return;
+    // Release the slot up front: a throw below must not leave the native
+    // recorder pinned, or every later recording fails to prepare.
+    recordingRef.current = null;
+    setIsRecording(false);
+    setLoading(true);
+    try {
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+
+      if (!uri) throw new Error('Recording produced no audio file');
+
+      const base64Audio = await new File(uri).base64();
+      const extension = uri.split('.').pop().toLowerCase();
+      const mimeType = MIME_BY_EXTENSION[extension] || 'audio/aac';
+
+      const voiceRes = await api.transcribeVoiceAudio(base64Audio, null, mimeType);
+      setLoading(false);
+
+      if (!voiceRes.query) {
+        addAssistantMessage(
+          'I could not make out any speech in that recording. Hold the microphone button while you speak, or type your question instead.'
+        );
+        return;
       }
 
-      setLoading(true);
-      // Transcribe voice recording via backend AI service
-      const voiceRes = await api.transcribeVoiceAudio(base64Audio);
-      const transcribedQuery = voiceRes.query || 'What are the dosage instructions for Paracetamol?';
-      setLoading(false);
-
-      handleSendMessage(transcribedQuery);
+      handleSendMessage(voiceRes.query);
     } catch (err) {
-      console.warn('Stop recording error:', err.message);
+      console.warn('Voice transcription error:', err.message);
       setLoading(false);
+      addAssistantMessage(
+        '⚠️ Could not process that voice recording. Check your connection and try again, or type your question.'
+      );
     }
   };
 

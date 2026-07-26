@@ -27,6 +27,11 @@ console.log('MedhaNet Mobile connecting to Backend API at:', API_URL);
 
 let authToken = null;
 let currentUser = null;
+let onUnauthorized = null;
+
+export const setOnUnauthorized = (handler) => {
+  onUnauthorized = handler;
+};
 
 export const setAuthToken = (token) => {
   authToken = token;
@@ -50,6 +55,20 @@ client.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// A reload drops the in-memory token, so surface that as a trip back to the
+// login screen rather than a string of unexplained 401s.
+client.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (err.response?.status === 401) {
+      authToken = null;
+      currentUser = null;
+      if (onUnauthorized) onUnauthorized();
+    }
+    return Promise.reject(err);
+  }
+);
 
 export const api = {
   // Auth
@@ -114,9 +133,31 @@ export const api = {
       type: mimeType,
     });
 
+    // Gemini needs ~20s to read a prescription, well past the default client timeout.
     const res = await client.post('/prescriptions/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
     });
+    return res.data;
+  },
+
+  getNearbyPharmacies: async (lat = 8.9945, lng = 38.7896, radiusKm = 15) => {
+    const res = await client.get('/prescriptions/pharmacies/nearby', {
+      params: { lat, lng, radiusKm },
+    });
+    return res.data;
+  },
+
+  sendPrescriptionToPharmacy: async (prescriptionId, pharmacyId, note = '') => {
+    const res = await client.post(`/prescriptions/${prescriptionId}/send-to-pharmacy`, {
+      pharmacyId,
+      note,
+    });
+    return res.data;
+  },
+
+  getMyPrescriptions: async () => {
+    const res = await client.get('/prescriptions/mine');
     return res.data;
   },
 
@@ -126,8 +167,12 @@ export const api = {
     return res.data;
   },
 
-  transcribeVoiceAudio: async (audio_base64 = null, text = null) => {
-    const res = await client.post('/chat/voice', { audio_base64, text });
+  transcribeVoiceAudio: async (audio_base64 = null, text = null, mime_type = null) => {
+    const res = await client.post(
+      '/chat/voice',
+      { audio_base64, text, mime_type },
+      { timeout: 60000 }
+    );
     return res.data;
   },
 

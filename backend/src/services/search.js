@@ -39,3 +39,26 @@ export async function findNearbyStock({ q, lat, lng, radiusKm, limit }) {
     LIMIT ${limit}
   `;
 }
+
+/** Verified pharmacies near (lat, lng), nearest first, regardless of what they stock. */
+export async function findNearbyPharmacies({ lat, lng, radiusKm, limit }) {
+  const radiusM = radiusKm * 1000;
+
+  return prisma.$queryRaw`
+    SELECT
+      p.id        AS id,
+      p.name      AS name,
+      p.address   AS address,
+      p.phone     AS phone,
+      p.lat       AS lat,
+      p.lng       AS lng,
+      p.openTime  AS openTime,
+      p.closeTime AS closeTime,
+      ST_Distance_Sphere(POINT(p.lng, p.lat), POINT(${lng}, ${lat})) AS distanceM
+    FROM Pharmacy p
+    WHERE p.status = 'VERIFIED'
+    HAVING distanceM <= ${radiusM}
+    ORDER BY distanceM ASC
+    LIMIT ${limit}
+  `;
+}

@@ -8,6 +8,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { api } from '../services/api';
@@ -18,6 +19,12 @@ export default function PrescriptionScanScreen({ onClose }) {
   const [scanResult, setScanResult] = useState(null);
   const [reservingId, setReservingId] = useState(null);
   const [reservedSuccess, setReservedSuccess] = useState(null);
+  const [scanError, setScanError] = useState(null);
+  const [showRawText, setShowRawText] = useState(false);
+  const [pharmacies, setPharmacies] = useState(null);
+  const [loadingPharmacies, setLoadingPharmacies] = useState(false);
+  const [sendingToId, setSendingToId] = useState(null);
+  const [sentTo, setSentTo] = useState(null);
 
   const pickImage = async (useCamera = false) => {
     try {
@@ -41,6 +48,9 @@ export default function PrescriptionScanScreen({ onClose }) {
         setImageUri(result.assets[0].uri);
         setScanResult(null);
         setReservedSuccess(null);
+        setScanError(null);
+        setPharmacies(null);
+        setSentTo(null);
       }
     } catch (err) {
       console.warn('Image picker error:', err.message);
@@ -50,40 +60,45 @@ export default function PrescriptionScanScreen({ onClose }) {
   const handleScanPrescription = async () => {
     if (!imageUri) return;
     setLoading(true);
+    setScanError(null);
     try {
       const data = await api.uploadPrescription(imageUri);
       setScanResult(data);
     } catch (err) {
       console.warn('Scan failed:', err.message);
-      // High quality fallback result if server fails
-      setScanResult({
-        ocrResult: {
-          medicines: [
-            { name: "Amoxil", genericName: "Amoxicillin", strength: "500mg", dosage: "1 capsule 3x daily", duration: "7 days" },
-            { name: "Panadol", genericName: "Paracetamol", strength: "500mg", dosage: "1-2 tablets as needed", duration: "5 days" }
-          ],
-          patientNotes: "Extracted prescription instructions from photo scanner.",
-          confidence: "High",
-        },
-        matchedStock: [
-          {
-            rxMedicine: { name: "Amoxil 500mg" },
-            matchedMedicines: [
-              {
-                id: "med-1",
-                name: "Amoxil",
-                strength: "500mg",
-                pharmaciesWithStock: [
-                  { inventoryId: "inv-1", pharmacyName: "Kenema Pharmacy - Bole", address: "Bole Road, Addis Ababa", price: 180, quantity: 45 },
-                  { inventoryId: "inv-2", pharmacyName: "Gishen Pharmacy", address: "Piassa, Addis Ababa", price: 175, quantity: 20 },
-                ]
-              }
-            ]
-          }
-        ]
-      });
+      setScanError(
+        'Could not reach the scanner. Check your connection and try again — or send the photo straight to a pharmacy.'
+      );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadNearbyPharmacies = async () => {
+    setLoadingPharmacies(true);
+    try {
+      setPharmacies(await api.getNearbyPharmacies());
+    } catch (err) {
+      Alert.alert('Could not load pharmacies', 'Please check your connection and try again.');
+    } finally {
+      setLoadingPharmacies(false);
+    }
+  };
+
+  const handleSendToPharmacy = async (pharmacy) => {
+    if (!scanResult?.prescriptionId) return;
+    setSendingToId(pharmacy.id);
+    try {
+      await api.sendPrescriptionToPharmacy(
+        scanResult.prescriptionId,
+        pharmacy.id,
+        'Please read this prescription for me.'
+      );
+      setSentTo(pharmacy);
+    } catch (err) {
+      Alert.alert('Could not send', 'The prescription could not be sent to that pharmacy.');
+    } finally {
+      setSendingToId(null);
     }
   };
 
@@ -151,32 +166,144 @@ export default function PrescriptionScanScreen({ onClose }) {
           </View>
         )}
 
+        {scanError && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>{scanError}</Text>
+          </View>
+        )}
+
         {/* Scan Results */}
         {scanResult && (
           <View style={styles.resultsContainer}>
             <View style={styles.aiBadgeHeader}>
-              <Text style={styles.aiBadgeTitle}>🤖 AI Extraction Complete</Text>
-              <Text style={styles.confidenceText}>Confidence: {scanResult.ocrResult?.confidence || 'High'}</Text>
+              <Text style={styles.aiBadgeTitle}>🤖 Prescription Read</Text>
+              <Text
+                style={[
+                  styles.confidenceText,
+                  scanResult.needsReview && styles.confidenceLow,
+                ]}
+              >
+                Confidence: {scanResult.ocrResult?.confidence || 'Low'}
+              </Text>
             </View>
+
+            {/* Plain-language explanation */}
+            {scanResult.ocrResult?.readableSummary ? (
+              <View style={styles.sectionCard}>
+                <Text style={styles.sectionTitle}>What this prescription says</Text>
+                <Text style={styles.summaryText}>{scanResult.ocrResult.readableSummary}</Text>
+              </View>
+            ) : null}
+
+            {/* Verbatim transcription, plus an English rendering when it is not in English */}
+            {scanResult.ocrResult?.rawText ? (
+              <View style={styles.sectionCard}>
+                <TouchableOpacity onPress={() => setShowRawText(!showRawText)}>
+                  <Text style={styles.sectionTitle}>
+                    📄 Prescription text {showRawText ? '▲' : '▼'}
+                  </Text>
+                </TouchableOpacity>
+
+                {showRawText && (
+                  <>
+                    <Text style={styles.rawText}>{scanResult.ocrResult.rawText}</Text>
+                    {scanResult.ocrResult.englishText &&
+                    scanResult.ocrResult.language !== 'English' ? (
+                      <>
+                        <Text style={styles.rawTextLabel}>Translated to English</Text>
+                        <Text style={styles.rawText}>{scanResult.ocrResult.englishText}</Text>
+                      </>
+                    ) : null}
+                  </>
+                )}
+              </View>
+            ) : null}
 
             {/* Extracted Medicines */}
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>Prescribed Medications</Text>
-              {scanResult.ocrResult?.medicines?.map((med, idx) => (
-                <View key={idx} style={styles.medRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.rxName}>{med.name}</Text>
-                    <Text style={styles.rxSub}>{med.genericName} • {med.strength}</Text>
-                    <Text style={styles.rxDosage}>📋 Instructions: {med.dosage}</Text>
+            {scanResult.ocrResult?.medicines?.length > 0 && (
+              <View style={styles.sectionCard}>
+                <Text style={styles.sectionTitle}>Prescribed Medications</Text>
+                {scanResult.ocrResult.medicines.map((med, idx) => (
+                  <View key={idx} style={styles.medRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.rxName}>{med.name}</Text>
+                      <Text style={styles.rxSub}>{med.genericName} • {med.strength}</Text>
+                      <Text style={styles.rxDosage}>📋 Instructions: {med.dosage}</Text>
+                      {med.legible && med.legible !== 'clear' ? (
+                        <Text style={styles.legibleWarn}>
+                          ⚠️ {med.legible === 'guessed' ? 'Handwriting unclear — best guess' : 'Only partly legible'}
+                        </Text>
+                      ) : null}
+                    </View>
                   </View>
-                </View>
-              ))}
-              {scanResult.ocrResult?.patientNotes ? (
-                <Text style={styles.patientNotes}>💡 Note: {scanResult.ocrResult.patientNotes}</Text>
-              ) : null}
-            </View>
+                ))}
+                {scanResult.ocrResult?.patientNotes ? (
+                  <Text style={styles.patientNotes}>💡 Note: {scanResult.ocrResult.patientNotes}</Text>
+                ) : null}
+              </View>
+            )}
+
+            {/* Not readable / not a prescription: hand it to a human */}
+            {scanResult.needsReview && (
+              <View style={styles.reviewCard}>
+                <Text style={styles.reviewTitle}>⚠️ A pharmacist should check this</Text>
+                <Text style={styles.reviewReason}>
+                  {scanResult.ocrResult?.reviewReason ||
+                    'The scan was not clear enough to be certain. Do not rely on it as-is.'}
+                </Text>
+
+                {sentTo ? (
+                  <View style={styles.successBanner}>
+                    <Text style={styles.successBannerText}>
+                      ✅ Sent to {sentTo.name}. They can see your photo and will call you on {'\n'}
+                      your registered phone number.
+                    </Text>
+                  </View>
+                ) : !pharmacies ? (
+                  <TouchableOpacity
+                    style={styles.reviewBtn}
+                    onPress={loadNearbyPharmacies}
+                    disabled={loadingPharmacies}
+                  >
+                    {loadingPharmacies ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.reviewBtnText}>🏥 Send to a nearby pharmacy</Text>
+                    )}
+                  </TouchableOpacity>
+                ) : pharmacies.length === 0 ? (
+                  <Text style={styles.reviewReason}>No verified pharmacies found nearby.</Text>
+                ) : (
+                  <View>
+                    <Text style={styles.pickLabel}>Choose a pharmacy to review it:</Text>
+                    {pharmacies.map((ph) => (
+                      <View key={ph.id} style={styles.stockRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.stockPharmName}>🏥 {ph.name}</Text>
+                          <Text style={styles.stockPrice}>
+                            {ph.distanceKm} km • {ph.isOpen ? 'Open now' : 'Closed'}
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.quickReserveBtn}
+                          onPress={() => handleSendToPharmacy(ph)}
+                          disabled={sendingToId === ph.id}
+                        >
+                          {sendingToId === ph.id ? (
+                            <ActivityIndicator color="#fff" size="small" />
+                          ) : (
+                            <Text style={styles.quickReserveText}>Send</Text>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
 
             {/* Stock Match Section */}
+            {scanResult.matchedStock?.length > 0 && (
             <View style={styles.sectionCard}>
               <Text style={styles.sectionTitle}>Nearby Pharmacies With Stock</Text>
 
@@ -215,6 +342,7 @@ export default function PrescriptionScanScreen({ onClose }) {
                 </View>
               ))}
             </View>
+            )}
           </View>
         )}
       </ScrollView>
@@ -427,6 +555,85 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 12,
     fontWeight: 'bold',
+  },
+  confidenceLow: {
+    color: '#92400e',
+    backgroundColor: '#fef3c7',
+  },
+  summaryText: {
+    fontSize: 13,
+    color: '#334155',
+    lineHeight: 20,
+  },
+  rawText: {
+    fontSize: 12,
+    color: '#0f172a',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    lineHeight: 18,
+    marginTop: 8,
+  },
+  rawTextLabel: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#64748b',
+    marginTop: 14,
+    textTransform: 'uppercase',
+  },
+  legibleWarn: {
+    fontSize: 11,
+    color: '#b45309',
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  errorBanner: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    padding: 14,
+    borderRadius: 16,
+    marginTop: 16,
+  },
+  errorBannerText: {
+    color: '#991b1b',
+    fontSize: 13,
+  },
+  reviewCard: {
+    backgroundColor: '#fffbeb',
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#fcd34d',
+  },
+  reviewTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#92400e',
+  },
+  reviewReason: {
+    fontSize: 12,
+    color: '#78350f',
+    marginTop: 6,
+    lineHeight: 18,
+  },
+  reviewBtn: {
+    backgroundColor: '#b45309',
+    borderRadius: 14,
+    paddingVertical: 13,
+    alignItems: 'center',
+    marginTop: 14,
+  },
+  reviewBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  pickLabel: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#78350f',
+    marginTop: 14,
+    marginBottom: 4,
   },
   successBanner: {
     backgroundColor: '#dcfce7',

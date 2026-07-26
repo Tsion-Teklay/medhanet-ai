@@ -16,6 +16,7 @@ model User {
   createdAt    DateTime      @default(now())
   pharmacy     Pharmacy?
   reservations Reservation[]
+  prescriptions Prescription[]
 }
 
 model Pharmacy {
@@ -38,6 +39,7 @@ model Pharmacy {
   closeTime  String      @default("20:00")
   createdAt  DateTime    @default(now())
   inventory  Inventory[]
+  prescriptions Prescription[]
 
   @@index([status])
 }
@@ -93,14 +95,21 @@ model Reservation {
 }
 
 model Prescription {
-  id        String   @id @default(uuid())
-  userId    String
-  imageUrl  String   @db.Text
-  extracted Json?
-  status    String   @default("PROCESSING")
-  createdAt DateTime @default(now())
+  id           String    @id @default(uuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  imageUrl     String    @db.Text
+  extracted    Json?
+  status       String    @default("PROCESSING")
+  pharmacyId   String?
+  pharmacy     Pharmacy? @relation(fields: [pharmacyId], references: [id])
+  patientNote  String?   @db.Text
+  pharmacyNote String?   @db.Text
+  reviewedAt   DateTime?
+  createdAt    DateTime  @default(now())
 
   @@index([userId])
+  @@index([pharmacyId])
 }
 
 model ChatMessage {

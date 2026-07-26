@@ -18,7 +18,8 @@ dotenv.config();
 const app = express();
 
 app.use(cors());
-app.use(express.json());
+// Voice chat posts base64 audio, which blows past the 100kb express default.
+app.use(express.json({ limit: "10mb" }));
 app.use("/uploads", express.static("uploads"));
 app.use("/api", rateLimit({ windowMs: 60_000, max: 120 }));
 

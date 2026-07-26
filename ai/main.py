@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import base64
 import io
 from typing import List, Optional, Dict, Any
@@ -16,6 +17,9 @@ load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
+
+# Not the "latest" alias: that tracks the newest model, whose free tier is only 20 requests/day.
+GEMINI_MODEL = os.getenv("GEMINI_MODEL") or "gemini-2.5-flash"
 
 app = FastAPI(
     title="MedhaNet AI Services",
@@ -50,6 +54,7 @@ class ChatRequest(BaseModel):
 class VoiceRequest(BaseModel):
     audio_base64: Optional[str] = None
     text: Optional[str] = None
+    mime_type: Optional[str] = "audio/aac"
 
 
 # Emergency Red Flag Guardrails
@@ -94,73 +99,109 @@ def health():
     }
 
 
+OCR_PROMPT = """You are reading a photograph of a medical prescription from Ethiopia.
+It may be handwritten or printed, in English, Amharic (አማርኛ), or a mix of both.
+
+Return ONLY raw JSON, with no markdown fences, in exactly this shape:
+{
+  "isPrescription": true,
+  "language": "English | Amharic | Mixed | Unknown",
+  "rawText": "Every legible line transcribed verbatim, keeping line breaks as \\n. Write [illegible] where you cannot read a word.",
+  "englishText": "The same content rendered in plain English. If the original is already English, repeat it tidied up.",
+  "readableSummary": "2-4 short sentences a patient can understand: what was prescribed and how to take it.",
+  "medicines": [
+    {
+      "name": "Brand or trade name as written",
+      "genericName": "Generic chemical name",
+      "strength": "e.g. 500mg",
+      "dosage": "e.g. 1 tablet twice daily after meals",
+      "duration": "e.g. 7 days",
+      "legible": "clear | partially_legible | guessed"
+    }
+  ],
+  "prescriber": "Doctor or clinic name if visible, otherwise an empty string",
+  "patientNotes": "Any other instructions written by the doctor",
+  "confidence": "High | Medium | Low",
+  "needsPharmacistReview": false,
+  "reviewReason": "Short reason a human pharmacist should check this, or an empty string"
+}
+
+Rules:
+- If the image is not a medical prescription at all, set "isPrescription" to false, "confidence" to "Low",
+  "needsPharmacistReview" to true, leave "medicines" empty, and say what the image actually shows in "reviewReason".
+- Never invent a medicine you cannot actually see. If the handwriting is unreadable, mark that item "guessed".
+- Set "needsPharmacistReview" to true whenever confidence is Low, any item is guessed, or a dosage is missing.
+- Return valid JSON only.
+"""
+
+
+def _strip_json_fence(text: str) -> str:
+    text = (text or "").strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?", "", text).strip()
+    if text.endswith("```"):
+        text = text[:-3].strip()
+    return text
+
+
+def _needs_review_result(reason: str) -> Dict[str, Any]:
+    """Degraded result that still lets the patient hand the photo to a pharmacist."""
+    return {
+        "isPrescription": None,
+        "language": "Unknown",
+        "rawText": "",
+        "englishText": "",
+        "readableSummary": "",
+        "medicines": [],
+        "prescriber": "",
+        "patientNotes": "",
+        "confidence": "Low",
+        "needsPharmacistReview": True,
+        "reviewReason": reason,
+        "ocrFailed": True,
+    }
+
+
 @app.post("/ocr/prescription")
 def scan_prescription(req: OCRRequest):
     """
     Multimodal Gemini OCR scanning of prescription images.
-    Extracts medicine list, dosage instructions, and patient guidance.
+    Transcribes the prescription and flags anything a pharmacist should double-check.
     """
-    if GEMINI_API_KEY:
-        try:
-            # Decode base64 image
-            image_data = base64.b64decode(req.image_base64)
-            img = Image.open(io.BytesIO(image_data))
+    if not GEMINI_API_KEY:
+        return _needs_review_result("Automatic reading is unavailable, so a pharmacist should read this photo.")
 
-            model = genai.GenerativeModel("gemini-1.5-flash")
-            ocr_prompt = """Analyze this prescription image and return ONLY a structured JSON response with the following format:
-{
-  "medicines": [
-    {
-      "name": "Medicine Brand or Trade Name",
-      "genericName": "Generic Chemical Name",
-      "strength": "e.g. 500mg",
-      "dosage": "e.g. 1 tablet twice daily after meals",
-      "duration": "e.g. 7 days"
-    }
-  ],
-  "patientNotes": "Brief summary of doctor notes or instructions found on the prescription",
-  "confidence": "High / Medium / Low"
-}
-If handwriting is unclear, provide your best medical estimation. Return only valid raw JSON.
-"""
-            response = model.generate_content([img, ocr_prompt])
-            text_resp = response.text.strip()
-            
-            # Remove json markdown formatting if present
-            if text_resp.startswith("```json"):
-                text_resp = text_resp[7:]
-            if text_resp.endswith("```"):
-                text_resp = text_resp[:-3]
-            text_resp = text_resp.strip()
+    try:
+        image_data = base64.b64decode(req.image_base64)
+        img = Image.open(io.BytesIO(image_data))
+    except Exception as e:
+        print(f"Prescription image decode error: {e}")
+        raise HTTPException(status_code=400, detail="That file could not be read as an image")
 
-            import json
-            parsed = json.loads(text_resp)
-            return parsed
+    try:
+        model = genai.GenerativeModel(GEMINI_MODEL)
+        response = model.generate_content([img, OCR_PROMPT])
+        parsed = json.loads(_strip_json_fence(response.text))
+    except Exception as e:
+        print(f"Gemini OCR error: {e}")
+        return _needs_review_result("The prescription could not be read automatically.")
 
-        except Exception as e:
-            print(f"Gemini OCR error: {e}")
+    parsed.setdefault("isPrescription", True)
+    parsed.setdefault("medicines", [])
+    parsed.setdefault("confidence", "Low")
+    parsed.setdefault("rawText", "")
+    parsed.setdefault("reviewReason", "")
 
-    # Fallback response if Gemini key is missing or OCR fails
-    return {
-        "medicines": [
-            {
-                "name": "Amoxil",
-                "genericName": "Amoxicillin",
-                "strength": "500mg",
-                "dosage": "1 capsule 3 times daily",
-                "duration": "7 days"
-            },
-            {
-                "name": "Panadol",
-                "genericName": "Paracetamol",
-                "strength": "500mg",
-                "dosage": "1-2 tablets as needed for fever/pain",
-                "duration": "5 days"
-            }
-        ],
-        "patientNotes": "Prescription scanned successfully. Take Amoxicillin with meals to prevent stomach upset.",
-        "confidence": "High"
-    }
+    # An unreadable or non-prescription image must never come back looking confident.
+    if (
+        parsed["isPrescription"] is False
+        or not parsed["medicines"]
+        or str(parsed["confidence"]).lower() == "low"
+        or any(m.get("legible") == "guessed" for m in parsed["medicines"])
+    ):
+        parsed["needsPharmacistReview"] = True
+
+    return parsed
 
 
 @app.post("/chat")
@@ -182,7 +223,7 @@ def chat_assistant(req: ChatRequest):
     if GEMINI_API_KEY:
         try:
             model = genai.GenerativeModel(
-                model_name="gemini-1.5-flash",
+                model_name=GEMINI_MODEL,
                 system_instruction=SYSTEM_PROMPT
             )
 
@@ -209,6 +250,13 @@ def chat_assistant(req: ChatRequest):
     }
 
 
+TRANSCRIPTION_PROMPT = """Transcribe the speech in this audio recording verbatim.
+The speaker may use English, Amharic (አማርኛ), or a mix of both.
+Return only the transcribed words, with no translation, labels, quotation marks or commentary.
+If there is no intelligible speech, return exactly: NO_SPEECH
+"""
+
+
 @app.post("/voice/transcribe")
 def voice_transcribe(req: VoiceRequest):
     """
@@ -216,10 +264,26 @@ def voice_transcribe(req: VoiceRequest):
     """
     if req.text:
         return {"query": req.text, "status": "ok"}
-    
-    # Return placeholder query if audio payload was provided
-    return {
-        "query": "Amoxicillin 500mg stock near Bole",
-        "status": "ok",
-        "transcribedFromAudio": True
-    }
+
+    if not req.audio_base64:
+        return {"query": "", "status": "error", "error": "No audio or text supplied"}
+
+    if not GEMINI_API_KEY:
+        return {"query": "", "status": "error", "error": "Speech recognition needs GEMINI_API_KEY"}
+
+    try:
+        audio_bytes = base64.b64decode(req.audio_base64)
+        model = genai.GenerativeModel(GEMINI_MODEL)
+        response = model.generate_content([
+            {"mime_type": req.mime_type or "audio/aac", "data": audio_bytes},
+            TRANSCRIPTION_PROMPT,
+        ])
+
+        query = (response.text or "").strip().strip('"')
+        if not query or query == "NO_SPEECH":
+            return {"query": "", "status": "empty"}
+
+        return {"query": query, "status": "ok", "transcribedFromAudio": True}
+    except Exception as e:
+        print(f"Gemini transcription error: {e}")
+        return {"query": "", "status": "error", "error": "Transcription failed"}
