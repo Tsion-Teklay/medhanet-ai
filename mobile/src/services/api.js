@@ -100,6 +100,32 @@ export const api = {
     return res.data;
   },
 
+  // Speak a request; the backend transcribes it and returns nearby stock.
+  voiceSearch: async (audioBase64, mimeType, lat = 8.9945, lng = 38.7896, radiusKm = 25) => {
+    const res = await client.post(
+      '/search/voice',
+      { audio_base64: audioBase64, mime_type: mimeType, lat, lng, radiusKm },
+      { timeout: 60000 }
+    );
+    return res.data;
+  },
+
+  // Photograph a medicine pack; the backend identifies it and returns nearby stock.
+  identifyMedicine: async (imageBase64, mimeType, lat = 8.9945, lng = 38.7896, radiusKm = 25) => {
+    const res = await client.post(
+      '/search/identify',
+      { image_base64: imageBase64, mime_type: mimeType, lat, lng, radiusKm },
+      { timeout: 90000 }
+    );
+    return res.data;
+  },
+
+  // Every verified pharmacy, nearest first — used to flag the network on the map.
+  getAllPharmacies: async (lat = 8.9945, lng = 38.7896) => {
+    const res = await client.get('/pharmacies', { params: { lat, lng } });
+    return res.data;
+  },
+
   // Medicines Catalogue
   getMedicines: async (query = '') => {
     const res = await client.get('/medicines', { params: { q: query } });
@@ -162,8 +188,34 @@ export const api = {
   },
 
   // AI Assistant Chat & Emergency Guardrails
-  sendChatMessage: async (message, lat = 8.9945, lng = 38.7896) => {
-    const res = await client.post('/chat/message', { message, lat, lng });
+  sendChatMessage: async (message, options = {}) => {
+    const {
+      imageBase64 = null,
+      imageMimeType = null,
+      language = 'auto',
+      lat = 8.9945,
+      lng = 38.7896,
+    } = options;
+
+    const res = await client.post(
+      '/chat/message',
+      {
+        message,
+        lat,
+        lng,
+        language,
+        image_base64: imageBase64 || undefined,
+        image_mime_type: imageBase64 ? imageMimeType || 'image/jpeg' : undefined,
+      },
+      // Gemini needs far longer to read a photo than to answer plain text.
+      { timeout: imageBase64 ? 90000 : 45000 }
+    );
+    return res.data;
+  },
+
+  // Translate any reply between Amharic and English.
+  translateText: async (text, target) => {
+    const res = await client.post('/chat/translate', { text, target }, { timeout: 60000 });
     return res.data;
   },
 

@@ -40,6 +40,28 @@ export async function findNearbyStock({ q, lat, lng, radiusKm, limit }) {
   `;
 }
 
+/**
+ * Every verified pharmacy, nearest first. Unlike findNearbyPharmacies this has no
+ * radius cut-off, so the patient map can flag the whole network at once.
+ */
+export async function findAllPharmacies({ lat, lng }) {
+  return prisma.$queryRaw`
+    SELECT
+      p.id        AS id,
+      p.name      AS name,
+      p.address   AS address,
+      p.phone     AS phone,
+      p.lat       AS lat,
+      p.lng       AS lng,
+      p.openTime  AS openTime,
+      p.closeTime AS closeTime,
+      ST_Distance_Sphere(POINT(p.lng, p.lat), POINT(${lng}, ${lat})) AS distanceM
+    FROM Pharmacy p
+    WHERE p.status = 'VERIFIED'
+    ORDER BY distanceM ASC
+  `;
+}
+
 /** Verified pharmacies near (lat, lng), nearest first, regardless of what they stock. */
 export async function findNearbyPharmacies({ lat, lng, radiusKm, limit }) {
   const radiusM = radiusKm * 1000;

@@ -11,8 +11,11 @@ import {
   ScrollView,
 } from 'react-native';
 import { api } from '../services/api';
+import { useI18n } from '../i18n';
+import LanguageToggle from '../components/LanguageToggle';
 
 export default function AuthScreen({ onLoginSuccess }) {
+  const { t } = useI18n();
   const [isRegister, setIsRegister] = useState(false);
   const [phone, setPhone] = useState('0922000000');
   const [password, setPassword] = useState('password123');
@@ -22,11 +25,11 @@ export default function AuthScreen({ onLoginSuccess }) {
 
   const handleSubmit = async () => {
     if (!phone || !password) {
-      setError('Please fill in phone and password');
+      setError(t('auth.fillPhonePassword'));
       return;
     }
     if (isRegister && !name) {
-      setError('Please enter your full name');
+      setError(t('auth.enterName'));
       return;
     }
 
@@ -41,7 +44,7 @@ export default function AuthScreen({ onLoginSuccess }) {
       }
       onLoginSuccess();
     } catch (err) {
-      const msg = err.response?.data?.error || err.message || 'Authentication failed';
+      const msg = err.response?.data?.error || err.message || t('auth.failed');
       setError(msg);
     } finally {
       setLoading(false);
@@ -57,7 +60,7 @@ export default function AuthScreen({ onLoginSuccess }) {
       await api.login('0922000000', 'password123');
       onLoginSuccess();
     } catch (err) {
-      setError('Demo login failed. Make sure backend server is running.');
+      setError(t('auth.demoFailed'));
     } finally {
       setLoading(false);
     }
@@ -70,33 +73,30 @@ export default function AuthScreen({ onLoginSuccess }) {
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
+          <LanguageToggle style={styles.languageToggle} />
           <View style={styles.logoBadge}>
             <Text style={styles.logoText}>መ</Text>
           </View>
           <Text style={styles.title}>መድሃኔት AI</Text>
-          <Text style={styles.subtitle}>
-            Ethiopia's AI-Powered Healthcare & Medicine Network
-          </Text>
+          <Text style={styles.subtitle}>{t('auth.tagline')}</Text>
         </View>
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>
-            {isRegister ? 'Create Patient Account' : 'Welcome Back'}
+            {isRegister ? t('auth.createAccount') : t('auth.welcomeBack')}
           </Text>
           <Text style={styles.cardSub}>
-            {isRegister
-              ? 'Register to search nearby stock & reserve medicines'
-              : 'Log in to manage your medical reservations'}
+            {isRegister ? t('auth.registerSub') : t('auth.loginSub')}
           </Text>
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
           {isRegister && (
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Full Name</Text>
+              <Text style={styles.label}>{t('auth.fullName')}</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Abebe Bikila"
+                placeholder={t('auth.namePlaceholder')}
                 value={name}
                 onChangeText={setName}
                 placeholderTextColor="#94a3b8"
@@ -105,7 +105,7 @@ export default function AuthScreen({ onLoginSuccess }) {
           )}
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Phone Number</Text>
+            <Text style={styles.label}>{t('auth.phone')}</Text>
             <TextInput
               style={styles.input}
               placeholder="0922000000"
@@ -117,7 +117,7 @@ export default function AuthScreen({ onLoginSuccess }) {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Password</Text>
+            <Text style={styles.label}>{t('auth.password')}</Text>
             <TextInput
               style={styles.input}
               placeholder="••••••••"
@@ -137,7 +137,7 @@ export default function AuthScreen({ onLoginSuccess }) {
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.submitBtnText}>
-                {isRegister ? 'Sign Up as Patient' : 'Log In'}
+                {isRegister ? t('auth.signUp') : t('auth.logIn')}
               </Text>
             )}
           </TouchableOpacity>
@@ -147,7 +147,7 @@ export default function AuthScreen({ onLoginSuccess }) {
             onPress={handleDemoLogin}
             disabled={loading}
           >
-            <Text style={styles.demoBtnText}>⚡ Quick Demo Patient Login</Text>
+            <Text style={styles.demoBtnText}>{t('auth.demoLogin')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -158,9 +158,7 @@ export default function AuthScreen({ onLoginSuccess }) {
             }}
           >
             <Text style={styles.toggleText}>
-              {isRegister
-                ? 'Already have an account? Log in'
-                : "Don't have an account? Register as Patient"}
+              {isRegister ? t('auth.haveAccount') : t('auth.noAccount')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -182,6 +180,10 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     marginBottom: 32,
+  },
+  languageToggle: {
+    alignSelf: 'center',
+    marginBottom: 16,
   },
   logoBadge: {
     width: 64,

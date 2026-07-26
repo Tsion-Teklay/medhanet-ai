@@ -12,8 +12,11 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { api } from '../services/api';
+import { useI18n } from '../i18n';
+import LanguageToggle from '../components/LanguageToggle';
 
 export default function PrescriptionScanScreen({ onClose }) {
+  const { t } = useI18n();
   const [imageUri, setImageUri] = useState(null);
   const [loading, setLoading] = useState(false);
   const [scanResult, setScanResult] = useState(null);
@@ -36,7 +39,7 @@ export default function PrescriptionScanScreen({ onClose }) {
       }
 
       if (!permissionResult.granted) {
-        Alert.alert('Permission Needed', 'Please allow camera/photo library access to scan prescriptions.');
+        Alert.alert(t('common.permissionNeeded'), t('scan.permissionMessage'));
         return;
       }
 
@@ -66,9 +69,7 @@ export default function PrescriptionScanScreen({ onClose }) {
       setScanResult(data);
     } catch (err) {
       console.warn('Scan failed:', err.message);
-      setScanError(
-        'Could not reach the scanner. Check your connection and try again — or send the photo straight to a pharmacy.'
-      );
+      setScanError(t('scan.scanFailed'));
     } finally {
       setLoading(false);
     }
@@ -79,7 +80,7 @@ export default function PrescriptionScanScreen({ onClose }) {
     try {
       setPharmacies(await api.getNearbyPharmacies());
     } catch (err) {
-      Alert.alert('Could not load pharmacies', 'Please check your connection and try again.');
+      Alert.alert(t('scan.couldNotLoadPharmacies'), t('common.tryAgain'));
     } finally {
       setLoadingPharmacies(false);
     }
@@ -92,11 +93,11 @@ export default function PrescriptionScanScreen({ onClose }) {
       await api.sendPrescriptionToPharmacy(
         scanResult.prescriptionId,
         pharmacy.id,
-        'Please read this prescription for me.'
+        t('scan.pharmacyNote')
       );
       setSentTo(pharmacy);
     } catch (err) {
-      Alert.alert('Could not send', 'The prescription could not be sent to that pharmacy.');
+      Alert.alert(t('scan.couldNotSend'), t('scan.couldNotSendDetail'));
     } finally {
       setSendingToId(null);
     }
@@ -108,7 +109,7 @@ export default function PrescriptionScanScreen({ onClose }) {
       const res = await api.createReservation(inventoryId, 1);
       setReservedSuccess({ pharmacyName, pickupCode: res.pickupCode });
     } catch (err) {
-      Alert.alert('Reservation Error', 'Could not complete reservation.');
+      Alert.alert(t('scan.reservationError'), t('scan.reservationFailed'));
     } finally {
       setReservingId(null);
     }
@@ -119,9 +120,10 @@ export default function PrescriptionScanScreen({ onClose }) {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-          <Text style={styles.closeText}>← Back</Text>
+          <Text style={styles.closeText}>{t('common.back')}</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>📷 Gemini AI Prescription Scanner</Text>
+        <Text style={styles.title}>{t('scan.title')}</Text>
+        <LanguageToggle style={styles.langToggle} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -129,17 +131,15 @@ export default function PrescriptionScanScreen({ onClose }) {
         {!imageUri ? (
           <View style={styles.uploadBox}>
             <Text style={styles.uploadIcon}>📑</Text>
-            <Text style={styles.uploadTitle}>Scan Doctor's Prescription</Text>
-            <Text style={styles.uploadSub}>
-              Take a clear photo or upload a prescription to extract medicine dosage & find stock instantly.
-            </Text>
+            <Text style={styles.uploadTitle}>{t('scan.uploadTitle')}</Text>
+            <Text style={styles.uploadSub}>{t('scan.uploadSub')}</Text>
 
             <View style={styles.btnRow}>
               <TouchableOpacity style={styles.actionBtn} onPress={() => pickImage(true)}>
-                <Text style={styles.actionBtnText}>📷 Take Photo</Text>
+                <Text style={styles.actionBtnText}>{t('scan.takePhoto')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.actionBtn, styles.galleryBtn]} onPress={() => pickImage(false)}>
-                <Text style={styles.galleryBtnText}>🖼️ Choose Gallery</Text>
+                <Text style={styles.galleryBtnText}>{t('scan.chooseGallery')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -147,7 +147,7 @@ export default function PrescriptionScanScreen({ onClose }) {
           <View style={styles.previewCard}>
             <Image source={{ uri: imageUri }} style={styles.previewImage} resizeMode="cover" />
             <TouchableOpacity style={styles.repickBtn} onPress={() => pickImage(false)}>
-              <Text style={styles.repickText}>Change Image</Text>
+              <Text style={styles.repickText}>{t('scan.changeImage')}</Text>
             </TouchableOpacity>
 
             {!scanResult && (
@@ -159,7 +159,7 @@ export default function PrescriptionScanScreen({ onClose }) {
                 {loading ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.scanSubmitText}>✨ Scan with Gemini AI</Text>
+                  <Text style={styles.scanSubmitText}>{t('scan.scanNow')}</Text>
                 )}
               </TouchableOpacity>
             )}
@@ -176,21 +176,23 @@ export default function PrescriptionScanScreen({ onClose }) {
         {scanResult && (
           <View style={styles.resultsContainer}>
             <View style={styles.aiBadgeHeader}>
-              <Text style={styles.aiBadgeTitle}>🤖 Prescription Read</Text>
+              <Text style={styles.aiBadgeTitle}>{t('scan.prescriptionRead')}</Text>
               <Text
                 style={[
                   styles.confidenceText,
                   scanResult.needsReview && styles.confidenceLow,
                 ]}
               >
-                Confidence: {scanResult.ocrResult?.confidence || 'Low'}
+                {t('scan.confidence', {
+                  level: scanResult.ocrResult?.confidence || t('scan.confidenceLow'),
+                })}
               </Text>
             </View>
 
             {/* Plain-language explanation */}
             {scanResult.ocrResult?.readableSummary ? (
               <View style={styles.sectionCard}>
-                <Text style={styles.sectionTitle}>What this prescription says</Text>
+                <Text style={styles.sectionTitle}>{t('scan.whatItSays')}</Text>
                 <Text style={styles.summaryText}>{scanResult.ocrResult.readableSummary}</Text>
               </View>
             ) : null}
@@ -200,7 +202,7 @@ export default function PrescriptionScanScreen({ onClose }) {
               <View style={styles.sectionCard}>
                 <TouchableOpacity onPress={() => setShowRawText(!showRawText)}>
                   <Text style={styles.sectionTitle}>
-                    📄 Prescription text {showRawText ? '▲' : '▼'}
+                    {t('scan.prescriptionText')} {showRawText ? '▲' : '▼'}
                   </Text>
                 </TouchableOpacity>
 
@@ -210,7 +212,7 @@ export default function PrescriptionScanScreen({ onClose }) {
                     {scanResult.ocrResult.englishText &&
                     scanResult.ocrResult.language !== 'English' ? (
                       <>
-                        <Text style={styles.rawTextLabel}>Translated to English</Text>
+                        <Text style={styles.rawTextLabel}>{t('scan.translatedToEnglish')}</Text>
                         <Text style={styles.rawText}>{scanResult.ocrResult.englishText}</Text>
                       </>
                     ) : null}
@@ -222,23 +224,27 @@ export default function PrescriptionScanScreen({ onClose }) {
             {/* Extracted Medicines */}
             {scanResult.ocrResult?.medicines?.length > 0 && (
               <View style={styles.sectionCard}>
-                <Text style={styles.sectionTitle}>Prescribed Medications</Text>
+                <Text style={styles.sectionTitle}>{t('scan.prescribedMedications')}</Text>
                 {scanResult.ocrResult.medicines.map((med, idx) => (
                   <View key={idx} style={styles.medRow}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.rxName}>{med.name}</Text>
                       <Text style={styles.rxSub}>{med.genericName} • {med.strength}</Text>
-                      <Text style={styles.rxDosage}>📋 Instructions: {med.dosage}</Text>
+                      <Text style={styles.rxDosage}>{t('scan.instructions', { dosage: med.dosage })}</Text>
                       {med.legible && med.legible !== 'clear' ? (
                         <Text style={styles.legibleWarn}>
-                          ⚠️ {med.legible === 'guessed' ? 'Handwriting unclear — best guess' : 'Only partly legible'}
+                          {med.legible === 'guessed'
+                            ? t('scan.handwritingUnclear')
+                            : t('scan.partlyLegible')}
                         </Text>
                       ) : null}
                     </View>
                   </View>
                 ))}
                 {scanResult.ocrResult?.patientNotes ? (
-                  <Text style={styles.patientNotes}>💡 Note: {scanResult.ocrResult.patientNotes}</Text>
+                  <Text style={styles.patientNotes}>
+                    {t('scan.note', { note: scanResult.ocrResult.patientNotes })}
+                  </Text>
                 ) : null}
               </View>
             )}
@@ -246,17 +252,15 @@ export default function PrescriptionScanScreen({ onClose }) {
             {/* Not readable / not a prescription: hand it to a human */}
             {scanResult.needsReview && (
               <View style={styles.reviewCard}>
-                <Text style={styles.reviewTitle}>⚠️ A pharmacist should check this</Text>
+                <Text style={styles.reviewTitle}>{t('scan.pharmacistShouldCheck')}</Text>
                 <Text style={styles.reviewReason}>
-                  {scanResult.ocrResult?.reviewReason ||
-                    'The scan was not clear enough to be certain. Do not rely on it as-is.'}
+                  {scanResult.ocrResult?.reviewReason || t('scan.defaultReviewReason')}
                 </Text>
 
                 {sentTo ? (
                   <View style={styles.successBanner}>
                     <Text style={styles.successBannerText}>
-                      ✅ Sent to {sentTo.name}. They can see your photo and will call you on {'\n'}
-                      your registered phone number.
+                      {t('scan.sentToPharmacy', { name: sentTo.name })}
                     </Text>
                   </View>
                 ) : !pharmacies ? (
@@ -268,20 +272,23 @@ export default function PrescriptionScanScreen({ onClose }) {
                     {loadingPharmacies ? (
                       <ActivityIndicator color="#fff" />
                     ) : (
-                      <Text style={styles.reviewBtnText}>🏥 Send to a nearby pharmacy</Text>
+                      <Text style={styles.reviewBtnText}>{t('scan.sendToNearby')}</Text>
                     )}
                   </TouchableOpacity>
                 ) : pharmacies.length === 0 ? (
-                  <Text style={styles.reviewReason}>No verified pharmacies found nearby.</Text>
+                  <Text style={styles.reviewReason}>{t('scan.noPharmaciesNearby')}</Text>
                 ) : (
                   <View>
-                    <Text style={styles.pickLabel}>Choose a pharmacy to review it:</Text>
+                    <Text style={styles.pickLabel}>{t('scan.choosePharmacy')}</Text>
                     {pharmacies.map((ph) => (
                       <View key={ph.id} style={styles.stockRow}>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.stockPharmName}>🏥 {ph.name}</Text>
                           <Text style={styles.stockPrice}>
-                            {ph.distanceKm} km • {ph.isOpen ? 'Open now' : 'Closed'}
+                            {t('scan.distanceOpen', {
+                              km: ph.distanceKm,
+                              status: ph.isOpen ? t('common.openNow') : t('common.closed'),
+                            })}
                           </Text>
                         </View>
                         <TouchableOpacity
@@ -292,7 +299,7 @@ export default function PrescriptionScanScreen({ onClose }) {
                           {sendingToId === ph.id ? (
                             <ActivityIndicator color="#fff" size="small" />
                           ) : (
-                            <Text style={styles.quickReserveText}>Send</Text>
+                            <Text style={styles.quickReserveText}>{t('common.send')}</Text>
                           )}
                         </TouchableOpacity>
                       </View>
@@ -305,12 +312,15 @@ export default function PrescriptionScanScreen({ onClose }) {
             {/* Stock Match Section */}
             {scanResult.matchedStock?.length > 0 && (
             <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>Nearby Pharmacies With Stock</Text>
+              <Text style={styles.sectionTitle}>{t('scan.nearbyWithStock')}</Text>
 
               {reservedSuccess && (
                 <View style={styles.successBanner}>
                   <Text style={styles.successBannerText}>
-                    ✅ Stock reserved at {reservedSuccess.pharmacyName}! OTP: {reservedSuccess.pickupCode}
+                    {t('scan.reservedAt', {
+                      name: reservedSuccess.pharmacyName,
+                      code: reservedSuccess.pickupCode,
+                    })}
                   </Text>
                 </View>
               )}
@@ -322,7 +332,9 @@ export default function PrescriptionScanScreen({ onClose }) {
                       <View key={pharm.inventoryId} style={styles.stockRow}>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.stockPharmName}>🏥 {pharm.pharmacyName}</Text>
-                          <Text style={styles.stockPrice}>ETB {pharm.price} • {pharm.quantity} in stock</Text>
+                          <Text style={styles.stockPrice}>
+                            {t('scan.stockLine', { price: pharm.price, count: pharm.quantity })}
+                          </Text>
                         </View>
 
                         <TouchableOpacity
@@ -333,7 +345,7 @@ export default function PrescriptionScanScreen({ onClose }) {
                           {reservingId === pharm.inventoryId ? (
                             <ActivityIndicator color="#fff" size="small" />
                           ) : (
-                            <Text style={styles.quickReserveText}>1-Tap Reserve</Text>
+                            <Text style={styles.quickReserveText}>{t('scan.oneTapReserve')}</Text>
                           )}
                         </TouchableOpacity>
                       </View>
@@ -375,6 +387,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#0f172a',
+  },
+  langToggle: {
+    marginLeft: 'auto',
   },
   content: {
     padding: 20,

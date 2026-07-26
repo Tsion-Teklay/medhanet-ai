@@ -6,6 +6,33 @@ import { prisma } from "../lib/prisma.js";
 
 const router = Router();
 
+const aiServiceUrl = () => process.env.AI_SERVICE_URL || "http://localhost:8000";
+
+/** Predominantly Ethiopic script means the patient is writing Amharic. */
+function isAmharic(text) {
+  const letters = (text || "").match(/\p{L}/gu) || [];
+  if (letters.length === 0) return false;
+  const ethiopic = letters.filter((c) => /[\u1200-\u137F]/.test(c)).length;
+  return ethiopic / letters.length > 0.3;
+}
+
+// Used only when the AI service itself is unreachable, so these must never be
+// English-only: an Amharic speaker would get an unreadable answer.
+const OFFLINE_REPLY = {
+  en: "I could not reach the medical assistant just now. Please try again in a moment. You can still search nearby verified pharmacies in MedhaNet, and if your symptoms are severe please see a doctor without waiting.",
+  am: "ይቅርታ፣ በአሁኑ ሰዓት መልስ መስጠት አልቻልኩም። እባክዎ ትንሽ ቆይተው እንደገና ይሞክሩ። አሁንም በመድሃኔት አፕሊኬሽን በአቅራቢያዎ የሚገኙ የተረጋገጡ ፋርማሲዎችን መፈለግ ይችላሉ። ምልክቶችዎ የከፉ ከሆነ ግን ሳይዘገዩ ሐኪም ያማክሩ።",
+};
+
+const OFFLINE_IMAGE_REPLY = {
+  en: "I could not analyse that photo just now because the AI service is unreachable. Please describe what you are seeing and I will help.",
+  am: "ይቅርታ፣ በአሁኑ ሰዓት ፎቶውን መመልከት አልቻልኩም። እባክዎ የሚያዩትን ይግለጹልኝ፤ እረዳዎታለሁ።",
+};
+
+const OFFLINE_EMERGENCY_REPLY = {
+  en: "⚠️ EMERGENCY DETECTED: If you or someone near you is experiencing severe symptoms like chest pain, difficulty breathing, or severe bleeding, please call emergency services immediately or visit the nearest hospital emergency room.",
+  am: "⚠️ የአደጋ ጊዜ ማስጠንቀቂያ፦ እርስዎ ወይም በአቅራቢያዎ ያለ ሰው እንደ የደረት ሕመም፣ የመተንፈስ ችግር ወይም ከባድ የደም መፍሰስ ያሉ ከባድ ምልክቶች ካሉ፣ እባክዎ ወዲያውኑ ለአደጋ ጊዜ አገልግሎት ይደውሉ ወይም በአቅራቢያዎ ወደሚገኝ ሆስፒታል ድንገተኛ ክፍል ይሂዱ።",
+};
+
 // Middleware to extract optional user from Bearer token
 function optionalAuth(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -23,11 +50,19 @@ function optionalAuth(req, res, next) {
   next();
 }
 
-const chatSchema = z.object({
-  message: z.string().min(1, "Message cannot be empty"),
-  lat: z.number().optional(),
-  lng: z.number().optional(),
-});
+const chatSchema = z
+  .object({
+    message: z.string().default(""),
+    lat: z.number().optional(),
+    lng: z.number().optional(),
+    image_base64: z.string().optional(),
+    image_mime_type: z.string().optional(),
+    language: z.enum(["auto", "en", "am"]).default("auto"),
+  })
+  // A photo on its own is a valid question, so only reject when both are missing.
+  .refine((d) => d.message.trim().length > 0 || Boolean(d.image_base64), {
+    message: "Send a message or a photo",
+  });
 
 /** Send message to AI Assistant (supports authenticated & guest users) */
 router.post("/message", optionalAuth, async (req, res, next) => {
@@ -36,8 +71,10 @@ router.post("/message", optionalAuth, async (req, res, next) => {
     return res.status(400).json({ error: parsed.error.issues[0].message });
   }
 
-  const { message, lat, lng } = parsed.data;
+  const { message, lat, lng, image_base64, image_mime_type, language } = parsed.data;
   const userId = req.user?.id || null;
+  // Chat history is text-only, so a photo-only turn still needs something readable.
+  const storedMessage = message.trim() || "[Sent a photo]";
 
   try {
     let formattedHistory = [];
@@ -57,7 +94,7 @@ router.post("/message", optionalAuth, async (req, res, next) => {
 
       // Save user message to database
       await prisma.chatMessage.create({
-        data: { userId, role: "user", content: message },
+        data: { userId, role: "user", content: storedMessage },
       });
     }
 
@@ -72,8 +109,12 @@ router.post("/message", optionalAuth, async (req, res, next) => {
           history: formattedHistory,
           user_lat: lat,
           user_lng: lng,
+          image_base64,
+          image_mime_type,
+          language,
         },
-        { timeout: 15000 }
+        // Reading a photo takes Gemini considerably longer than answering text.
+        { timeout: image_base64 ? 60000 : 15000 }
       );
 
       aiResponseData = response.data;
@@ -87,12 +128,15 @@ router.post("/message", optionalAuth, async (req, res, next) => {
         lower.includes("can't breathe") ||
         lower.includes("cannot breathe") ||
         lower.includes("heavy bleeding") ||
-        lower.includes("poison");
+        lower.includes("poison") ||
+        message.includes("የደረት ህመም") ||
+        message.includes("ከባድ ደም መፈሰስ");
+
+      const lang = language === "auto" ? (isAmharic(message) ? "am" : "en") : language;
 
       if (isEmergency) {
         aiResponseData = {
-          reply:
-            "⚠️ EMERGENCY DETECTED: If you or someone near you is experiencing severe symptoms like chest pain, difficulty breathing, or severe bleeding, please call emergency services immediately or visit the nearest hospital emergency room.",
+          reply: OFFLINE_EMERGENCY_REPLY[lang],
           emergency: true,
           emergencyContacts: [
             { name: "Ethiopian Emergency Medical Line", phone: "907" },
@@ -102,8 +146,9 @@ router.post("/message", optionalAuth, async (req, res, next) => {
         };
       } else {
         aiResponseData = {
-          reply: `Thank you for asking: "${message}". I am MedhaNet AI, your healthcare assistant. Please consult a licensed medical doctor or pharmacist for official diagnosis. You can search nearby verified pharmacy stock on MedhaNet!`,
+          reply: image_base64 ? OFFLINE_IMAGE_REPLY[lang] : OFFLINE_REPLY[lang],
           emergency: false,
+          language: lang,
         };
       }
     }
@@ -124,6 +169,7 @@ router.post("/message", optionalAuth, async (req, res, next) => {
       emergency: aiResponseData.emergency || false,
       emergencyContacts: aiResponseData.emergencyContacts || [],
       groundedStock: aiResponseData.groundedStock || [],
+      language: aiResponseData.language || language,
     });
   } catch (err) {
     next(err);
@@ -154,6 +200,29 @@ router.post("/voice", optionalAuth, async (req, res, next) => {
     }
   } catch (err) {
     next(err);
+  }
+});
+
+const translateSchema = z.object({
+  text: z.string().min(1, "Nothing to translate"),
+  target: z.enum(["en", "am"]),
+});
+
+/** Translate any assistant reply between Amharic and English. */
+router.post("/translate", optionalAuth, async (req, res, next) => {
+  const parsed = translateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0].message });
+  }
+
+  try {
+    const response = await axios.post(`${aiServiceUrl()}/translate`, parsed.data, {
+      timeout: 45000,
+    });
+    return res.json(response.data);
+  } catch (aiErr) {
+    console.warn("Translation failed:", aiErr.message);
+    return res.status(503).json({ error: "Translation service unavailable" });
   }
 });
 

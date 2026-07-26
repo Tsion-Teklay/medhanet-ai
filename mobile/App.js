@@ -3,6 +3,7 @@ import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { setOnUnauthorized } from './src/services/api';
+import { LanguageProvider, useI18n } from './src/i18n';
 import AuthScreen from './src/screens/AuthScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import ReservationsScreen from './src/screens/ReservationsScreen';
@@ -10,6 +11,15 @@ import PrescriptionScanScreen from './src/screens/PrescriptionScanScreen';
 import AIChatScreen from './src/screens/AIChatScreen';
 
 export default function App() {
+  return (
+    <LanguageProvider>
+      <MedhaNetApp />
+    </LanguageProvider>
+  );
+}
+
+function MedhaNetApp() {
+  const { t } = useI18n();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeTab, setActiveTab] = useState('home'); // 'home' | 'reservations' | 'scan' | 'chat'
 
@@ -48,7 +58,9 @@ export default function App() {
           onPress={() => setActiveTab('home')}
         >
           <Text style={styles.tabIcon}>🏠</Text>
-          <Text style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}>Search</Text>
+          <Text style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}>
+            {t('tabs.search')}
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -56,7 +68,9 @@ export default function App() {
           onPress={() => setActiveTab('reservations')}
         >
           <Text style={styles.tabIcon}>📋</Text>
-          <Text style={[styles.tabLabel, activeTab === 'reservations' && styles.tabLabelActive]}>Reservations</Text>
+          <Text style={[styles.tabLabel, activeTab === 'reservations' && styles.tabLabelActive]}>
+            {t('tabs.reservations')}
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -64,7 +78,9 @@ export default function App() {
           onPress={() => setActiveTab('scan')}
         >
           <Text style={styles.tabIcon}>📷</Text>
-          <Text style={[styles.tabLabel, activeTab === 'scan' && styles.tabLabelActive]}>Scan Rx</Text>
+          <Text style={[styles.tabLabel, activeTab === 'scan' && styles.tabLabelActive]}>
+            {t('tabs.scan')}
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -72,7 +88,9 @@ export default function App() {
           onPress={() => setActiveTab('chat')}
         >
           <Text style={styles.tabIcon}>🤖</Text>
-          <Text style={[styles.tabLabel, activeTab === 'chat' && styles.tabLabelActive]}>AI Doctor</Text>
+          <Text style={[styles.tabLabel, activeTab === 'chat' && styles.tabLabelActive]}>
+            {t('tabs.chat')}
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

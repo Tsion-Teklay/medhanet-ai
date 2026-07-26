@@ -10,8 +10,17 @@ import {
   RefreshControl,
 } from 'react-native';
 import { api } from '../services/api';
+import { useI18n } from '../i18n';
+import LanguageToggle from '../components/LanguageToggle';
+
+const STATUS_KEYS = {
+  PENDING: 'reservations.statusPending',
+  COMPLETED: 'reservations.statusCompleted',
+  CANCELLED: 'reservations.statusCancelled',
+};
 
 export default function ReservationsScreen() {
+  const { t } = useI18n();
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -32,21 +41,24 @@ export default function ReservationsScreen() {
     fetchReservations();
   }, []);
 
+  const statusLabel = (status) =>
+    STATUS_KEYS[status] ? t(STATUS_KEYS[status]) : status;
+
   const handleCancel = (id) => {
     Alert.alert(
-      'Cancel Reservation',
-      'Are you sure you want to cancel this reservation and release the stock?',
+      t('reservations.cancelConfirmTitle'),
+      t('reservations.cancelConfirmMessage'),
       [
-        { text: 'No', style: 'cancel' },
+        { text: t('common.no'), style: 'cancel' },
         {
-          text: 'Yes, Cancel',
+          text: t('reservations.cancelConfirmYes'),
           style: 'destructive',
           onPress: async () => {
             try {
               await api.cancelReservation(id);
               fetchReservations();
             } catch (err) {
-              Alert.alert('Error', 'Failed to cancel reservation');
+              Alert.alert(t('common.error'), t('reservations.cancelFailed'));
             }
           },
         },
@@ -57,8 +69,11 @@ export default function ReservationsScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Reservations</Text>
-        <Text style={styles.headerSub}>Show OTP codes to pharmacy upon arrival</Text>
+        <View style={styles.headerRow}>
+          <Text style={styles.headerTitle}>{t('reservations.title')}</Text>
+          <LanguageToggle style={styles.languageToggle} />
+        </View>
+        <Text style={styles.headerSub}>{t('reservations.subtitle')}</Text>
       </View>
 
       {loading ? (
@@ -75,10 +90,8 @@ export default function ReservationsScreen() {
           contentContainerStyle={styles.listPadding}
           ListEmptyComponent={
             <View style={styles.emptyBox}>
-              <Text style={styles.emptyTitle}>No active reservations</Text>
-              <Text style={styles.emptySub}>
-                Search medicines on the home screen to reserve nearby stock!
-              </Text>
+              <Text style={styles.emptyTitle}>{t('reservations.empty')}</Text>
+              <Text style={styles.emptySub}>{t('reservations.emptySub')}</Text>
             </View>
           }
           renderItem={({ item }) => {
@@ -98,7 +111,7 @@ export default function ReservationsScreen() {
                         isCancelled && styles.statusCancelled,
                       ]}
                     >
-                      {item.status}
+                      {statusLabel(item.status)}
                     </Text>
                   </View>
                   <Text style={styles.dateText}>
@@ -106,18 +119,25 @@ export default function ReservationsScreen() {
                   </Text>
                 </View>
 
-                <Text style={styles.medName}>{med?.name || 'Medicine'}</Text>
+                <Text style={styles.medName}>
+                  {med?.name || t('reservations.medicine')}
+                </Text>
                 <Text style={styles.medDetails}>
-                  {med?.genericName} • Qty: {item.quantity} unit(s)
+                  {t('reservations.qty', {
+                    generic: med?.genericName,
+                    count: item.quantity,
+                  })}
                 </Text>
 
                 <View style={styles.otpSection}>
-                  <Text style={styles.otpLabel}>PICKUP CODE (OTP)</Text>
+                  <Text style={styles.otpLabel}>{t('reservations.pickupCode')}</Text>
                   <Text style={styles.otpCode}>{item.pickupCode}</Text>
                 </View>
 
                 <View style={styles.pharmacyBox}>
-                  <Text style={styles.pharmacyTitle}>🏥 {pharmacy?.name || 'Pharmacy'}</Text>
+                  <Text style={styles.pharmacyTitle}>
+                    🏥 {pharmacy?.name || t('reservations.pharmacy')}
+                  </Text>
                   <Text style={styles.pharmacyAddress}>{pharmacy?.address}</Text>
                   <Text style={styles.pharmacyPhone}>📞 {pharmacy?.phone}</Text>
                 </View>
@@ -127,7 +147,9 @@ export default function ReservationsScreen() {
                     style={styles.cancelBtn}
                     onPress={() => handleCancel(item.id)}
                   >
-                    <Text style={styles.cancelBtnText}>Cancel Reservation</Text>
+                    <Text style={styles.cancelBtnText}>
+                      {t('reservations.cancelReservation')}
+                    </Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -149,6 +171,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 16,
     backgroundColor: '#ffffff',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  languageToggle: {
+    marginLeft: 'auto',
   },
   headerTitle: {
     fontSize: 22,
